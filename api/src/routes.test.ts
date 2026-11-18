@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { determineAlert, router } from "./routes.ts";
+import { determineAlert, parseFundingInput, router } from "./routes.ts";
 
 describe("router", () => {
   it("répond 200 sur les deux routes de santé", () => {
@@ -28,6 +28,29 @@ describe("router", () => {
 
   it("répond 404 sur /api/v1/positions/:id pour un poste inconnu", () => {
     expect(router("GET", "/api/v1/positions/INCONNU").statut).toBe(404);
+  });
+
+  it("ajoute un financement valide à un poste et le renvoie dans la liste", () => {
+    const { statut, corps } = router("POST", "/api/v1/positions/P04/financements", {
+      funder: "Fondation Test",
+      amount: 15000,
+    });
+    expect(statut).toBe(201);
+    const fundings = (corps as { fundings: { funder: string }[] }).fundings;
+    expect(fundings.some((f) => f.funder === "Fondation Test")).toBe(true);
+  });
+});
+
+describe("parseFundingInput", () => {
+  it("rejette un financeur manquant ou vide", () => {
+    expect(parseFundingInput({ amount: 100 })).toBeNull();
+    expect(parseFundingInput({ funder: "  ", amount: 100 })).toBeNull();
+  });
+
+  it("accepte un financeur et un montant valides, sans date de fin", () => {
+    const funding = parseFundingInput({ funder: "Fondation Test", amount: 5000 });
+    expect(funding).not.toBeNull();
+    expect(funding?.endDate).toBeNull();
   });
 });
 

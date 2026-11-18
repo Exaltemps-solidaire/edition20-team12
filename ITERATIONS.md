@@ -5,6 +5,7 @@
 - **Temps restant annoncé** : ~30 minutes (au lancement de `/planifier-iterations`, le 2026-11-18) ; ~25-30 minutes confirmées au lancement de `/iteration 1` ; **50 minutes re-confirmées au lancement de cette replanification**, après clôture de l'Itération 1.
 - **Durée du tour de test de l'équipe** : 5 minutes (confirmée inchangée à la replanification).
 - **Temps restant au lancement de l'Itération 2** : 50 minutes (inchangé par rapport à la replanification précédente).
+- **Temps restant au lancement de l'Itération 3** : 45 minutes.
 - **Hors périmètre de cette fenêtre de build** : upload Excel, calcul réel de couverture/date de falaise, écran « Détail d'un poste », accès différencié par rôle, saisie des conventions/postes, vue stratégique direction (projections 12/24/36 mois), onglets « Justificatif financier » et « Contrôles » — voir « À venir ».
 
 ⚠️ **Capacité** : avec ~30 min restantes et un tour de test de 5 min, une itération coûte déjà environ 10 min (codage) + 5 min (publication) + 5 min (tour de test) = 20 min. Il ne reste pas assez de marge pour détailler une deuxième itération complète dans cette fenêtre : une seule itération est détaillée ci-dessous. Le temps sera redemandé au début de l'itération 1 et pourra changer ce calcul.
@@ -85,7 +86,7 @@
 
 ---
 
-## Itération 3 (proposition, à valider) : ajouter un financement à un poste
+## Itération 3 — Plan validé par le développeur le 2026-11-18 : ajouter un financement à un poste
 
 ✂️ Le point 1 de l'ancien « À venir » (« saisie des conventions et des postes ») est trop large pour une itération : deux écrans/onglets, et il mélange saisie et recalcul. Je le découpe. Cette itération ne couvre que l'ajout d'un financement à un poste existant (les postes restent ceux d'`api/src/routes.ts`, pas de création de poste) ; le recalcul réel de couverture reste hors périmètre (prochaine itération).
 
@@ -99,13 +100,43 @@
 - **Codage estimé** : 8 minutes.
 - **Fichiers prévus** : `api/src/routes.ts` (route `POST /api/v1/positions/:id/financements`), `frontend/src/app/postes/[id]/page.tsx` (formulaire).
 - **Tests unitaires prévus** : 1-2, sur la validation (financeur manquant rejeté, ajout valide accepté).
-- **Bilan** : _à remplir en fin d'itération._
+- **Bilan** :
+  - **Durée de codage réelle** : ~1 minute (`.iterations/3.debut`/`.fin`), très en dessous du budget, aucun dépassement, aucune question d'alarme posée.
+  - **Fait** :
+    - Critère 1 : `POST /api/v1/positions/:id/financements` avec financeur + montant ajoute le financement, visible dans la réponse et dans la liste affichée sur la page détail (testé en réel sur l'API déployée, poste P04).
+    - Critère 2 : un corps sans financeur (ou financeur vide) est rejeté (`400`), rien n'est ajouté ; le formulaire affiche un message d'erreur, les champs restent remplis.
+  - **Décision d'architecture** : `startDate` du financement saisi via ce formulaire est fixée à la date du jour côté API (pas de champ dans le formulaire, hors plan initial qui ne prévoyait que financeur/montant/date de fin) ; `router()` et `server.ts` acceptent désormais un corps de requête JSON optionnel (lecture du flux HTTP ajoutée dans `server.ts`), première route POST de l'API.
+  - **Reporté** : rien de nouveau pour cette itération ; le recalcul de couverture/alerte à partir des financements saisis reste hors périmètre (déjà prévu en « À venir » point 1).
+  - **Bloqué par le harnais** : rien — contrat de déployabilité sans borne (`./scripts/verifier-deployabilite.sh --construire` ; Docker absent de la VM, seul podman est disponible, préconisation non vérifiée comme en 1 et 2), `npm test` vert (14 tests), signal PM Lab accepté du premier coup.
+  - **Découverte (hors DoD)** : `localhost:8080/postes/P04/` (avec slash final) répond `403`, contrairement à `localhost:8080/postes/P04` (sans slash) qui répond `200` — comportement préexistant de `nginx.conf`/l'export statique (pas une régression de cette itération), sans impact car le front ne génère jamais de lien avec slash final.
+  - **Modifications** :
+    - `api/src/routes.ts` : champ `amount` sur `Funding` (déjà présent avant cette itération, repris tel quel), fonction `parseFundingInput`, route `POST /api/v1/positions/:id/financements` — critères 1 et 2.
+    - `api/src/server.ts` : lecture du corps de la requête HTTP (JSON), passé à `router()` — nécessaire pour critère 1.
+    - `api/src/routes.test.ts` : 3 tests ajoutés (ajout valide via le routeur, validation : financeur manquant/vide, financeur+montant valides) — DoD point 2.
+    - `frontend/src/app/postes/[id]/position-detail.tsx`, `position-detail.module.css` : formulaire d'ajout de financement (financeur, montant, date de fin optionnelle), affichage du montant dans la liste, message d'erreur — critères 1 et 2.
+    - `e2e/demo.spec.ts` : étape de démo ajoutée (ajout d'un financement, apparition dans la liste) ; non rejouée depuis cette machine (nécessite `BASE_URL=$URL_PUBLIQUE` depuis l'extérieur, cf. découverte de l'Itération 2).
+
+---
+
+## Itération 4 (proposition, à valider) : calcul réel de la couverture du mois de référence
+
+✂️ Le point 1 de « À venir » (calcul réel + date de falaise + trous/doublons) est trop large pour une itération : `cadrage/3-solution.md` (§ « Comment ça marche ») précise que le calcul croise les financements avec un **coût mensuel chargé par poste**, un champ qui n'existe pas encore sur `Position`, et que les financements doivent s'exprimer en **% ou en mois** de couverture (aujourd'hui, l'Itération 3 n'enregistre qu'un montant en €, pas une couverture). Je découpe : cette itération ne porte que sur `referenceCoverage` du mois de référence (01/11/2026, cf. Écran 1), à partir des financements actifs ce mois-là ; la date de falaise, les trous/doublons (alerte violet) et l'horizon restent hors périmètre (prochaines itérations).
+
+- ❓ Point à trancher par les cadreurs avant de coder : un financement doit-il porter un **% de couverture explicite** (ex. 60 %), ou le % se déduit-il du montant saisi rapporté au coût du poste ? Les deux sont compatibles avec le prototype mais changent le formulaire de l'Itération 3 (déjà en ligne) : ajouter un champ, ou ajouter un champ coût mensuel sur le poste.
+- **Dans le périmètre (si le point ci-dessus est tranché en faveur du %)** : champ `monthlyCost` sur `Position` (donnée en dur, comme les 8 postes) ; `referenceCoverage` recalculé comme somme des % de couverture des financements actifs au 01/11/2026, plafonné à 100 ; alerte recalculée avec la même règle qu'aujourd'hui.
+- **Hors périmètre** : date de falaise recalculée, couverture horizon, détection de doublon (violet), édition/suppression d'un financement existant.
+- **Critères d'acceptation (à confirmer avec les cadreurs)** :
+  - Étant donné un poste sans financement actif au mois de référence, `referenceCoverage` vaut 0 et l'alerte est rouge.
+  - Étant donné un poste avec des financements couvrant 100 % ce mois-là, `referenceCoverage` vaut 100.
+  - Étant donné le financement ajouté en Itération 3 (P04, montant seul), il continue de s'afficher sans erreur même s'il ne contribue pas encore au calcul (migration de données en dur, pas de perte).
+- **Codage estimé** : 8-10 minutes (tendu : touche le type `Position`, `determineAlert` reste inchangée mais son entrée change de source).
+- **Fichiers prévus** : `api/src/routes.ts`, `api/src/routes.test.ts`, `frontend/src/app/postes/[id]/position-detail.tsx` (si le formulaire change).
 
 ---
 
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
-1. Calcul réel du taux de couverture et de la date de falaise à partir des financements saisis ; détection des trous et doublons (alerte violet/chevauchement, reportée de l'itération 1).
+1. Date de falaise recalculée, couverture horizon, détection des trous et doublons (alerte violet/chevauchement) — suite de l'Itération 4.
 2. Saisie des postes eux-mêmes (onglet « Postes »), remplaçant le tableau en dur `POSITIONS` — si le temps le permet, sinon les postes restent fixes pour le pitch.
 3. Accès différencié par rôle : vue lecture seule pour la responsable d'antenne, sans salaire affiché.
 4. Vue stratégique direction : projections à 12, 24 et 36 mois (I2, écrans Maestro).

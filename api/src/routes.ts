@@ -4,7 +4,7 @@
 
 export type Reponse = { statut: number; corps?: unknown };
 
-export type Funding = { funder: string; startDate: string; endDate: string | null };
+export type Funding = { funder: string; amount: number; startDate: string; endDate: string | null };
 
 export type Position = {
   id: string;
@@ -57,7 +57,23 @@ function findPosition(id: string): (Position & { alert: Alert }) | undefined {
   return { ...position, alert: determineAlert(position.referenceCoverage, position.monthsBeforeCliff) };
 }
 
-export function router(methode: string, url: string): Reponse {
+// Validates the body of POST /api/v1/positions/:id/financements. Only funder
+// and amount are required (DoD iteration 3, critère 2) ; startDate defaults to
+// today since the form (iteration 3) doesn't ask for it.
+export function parseFundingInput(body: unknown): Funding | null {
+  if (typeof body !== "object" || body === null) return null;
+  const { funder, amount, endDate } = body as Record<string, unknown>;
+  if (typeof funder !== "string" || funder.trim() === "") return null;
+  if (typeof amount !== "number" || Number.isNaN(amount)) return null;
+  return {
+    funder: funder.trim(),
+    amount,
+    startDate: new Date().toISOString().slice(0, 10),
+    endDate: typeof endDate === "string" && endDate.trim() !== "" ? endDate : null,
+  };
+}
+
+export function router(methode: string, url: string, body?: unknown): Reponse {
   const chemin = new URL(url, "http://api").pathname;
   if (methode === "GET" && (chemin === "/health" || chemin === "/sante")) {
     return { statut: 200, corps: { status: "ok" } };
@@ -69,6 +85,15 @@ export function router(methode: string, url: string): Reponse {
   if (methode === "GET" && detailMatch) {
     const position = findPosition(detailMatch[1]);
     return position ? { statut: 200, corps: position } : { statut: 404 };
+  }
+  const fundingMatch = chemin.match(/^\/api\/v1\/positions\/([^/]+)\/financements$/);
+  if (methode === "POST" && fundingMatch) {
+    const position = POSITIONS.find((p) => p.id === fundingMatch[1]);
+    if (!position) return { statut: 404 };
+    const funding = parseFundingInput(body);
+    if (!funding) return { statut: 400, corps: { erreur: "financeur et montant requis" } };
+    position.fundings.push(funding);
+    return { statut: 201, corps: { ...position, alert: determineAlert(position.referenceCoverage, position.monthsBeforeCliff) } };
   }
   return { statut: 404 };
 }

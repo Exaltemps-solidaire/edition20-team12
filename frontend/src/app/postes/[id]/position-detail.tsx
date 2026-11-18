@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import pageStyles from "../../page.module.css";
 import styles from "./position-detail.module.css";
 
 type Alert = { color: "red" | "orange" | "green"; label: string };
 
-type Funding = { funder: string; startDate: string; endDate: string | null };
+type Funding = { funder: string; amount: number; startDate: string; endDate: string | null };
 
 type Position = {
   id: string;
@@ -23,6 +23,10 @@ type Position = {
 
 export default function PositionDetail({ id }: { id: string }) {
   const [position, setPosition] = useState<Position | null | undefined>(undefined);
+  const [funder, setFunder] = useState("");
+  const [amount, setAmount] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/v1/positions/${id}`)
@@ -34,6 +38,28 @@ export default function PositionDetail({ id }: { id: string }) {
       .then(setPosition)
       .catch(() => setPosition(null));
   }, [id]);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    const response = await fetch(`/api/v1/positions/${id}/financements`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        funder,
+        amount: amount === "" ? undefined : Number(amount),
+        endDate: endDate === "" ? null : endDate,
+      }),
+    });
+    if (!response.ok) {
+      setError("Financeur et montant sont requis.");
+      return;
+    }
+    setPosition(await response.json());
+    setFunder("");
+    setAmount("");
+    setEndDate("");
+  }
 
   return (
     <main className={pageStyles.page}>
@@ -72,13 +98,31 @@ export default function PositionDetail({ id }: { id: string }) {
                 const orphaned = funding.endDate !== null && position.referenceCoverage === 0;
                 return (
                   <li key={index}>
-                    {funding.funder} : {funding.startDate} → {funding.endDate ?? "en cours"}
+                    {funding.funder} : {funding.amount} € — {funding.startDate} → {funding.endDate ?? "en cours"}
                     {orphaned && <strong className={styles.orphaned}> (financement orphelin — poste vacant)</strong>}
                   </li>
                 );
               })}
             </ul>
           )}
+
+          <h2>Ajouter un financement</h2>
+          <form onSubmit={handleSubmit} className={styles.form}>
+            <label>
+              Financeur
+              <input value={funder} onChange={(e) => setFunder(e.target.value)} />
+            </label>
+            <label>
+              Montant (€)
+              <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </label>
+            <label>
+              Date de fin (optionnelle)
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </label>
+            <button type="submit">Ajouter</button>
+            {error && <p className={pageStyles.error}>{error}</p>}
+          </form>
         </>
       )}
     </main>

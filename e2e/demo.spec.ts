@@ -18,4 +18,11 @@ test("Démo : le cas passant", async ({ page }) => {
     await expect(page.getByRole("heading", { name: /Lyon/ })).toBeVisible();
     await expect(page.getByText("financement orphelin")).toBeVisible();
   });
+
+  await test.step("J'ajoute un financement et je le vois apparaître", async () => {
+    await page.getByLabel("Financeur").fill("Fondation Démo");
+    await page.getByLabel("Montant (€)").fill("20000");
+    await page.getByRole("button", { name: "Ajouter" }).click();
+    await expect(page.getByText(/Fondation Démo : 20000/)).toBeVisible();
+  });
 });
