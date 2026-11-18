@@ -25,4 +25,9 @@ test("Démo : le cas passant", async ({ page }) => {
     await page.getByRole("button", { name: "Ajouter" }).click();
     await expect(page.getByText(/Fondation Démo : 20000/)).toBeVisible();
   });
+
+  await test.step("La couverture du mois de référence se met à jour avec le nouveau financement", async () => {
+    const couverture = page.locator("xpath=//dt[text()='Couverture mois réf.']/following-sibling::dd[1]");
+    await expect(couverture).not.toHaveText("0%");
+  });
 });

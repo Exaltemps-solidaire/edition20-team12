@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { determineAlert, parseFundingInput, router } from "./routes.ts";
+import { computeCoverage, determineAlert, parseFundingInput, router } from "./routes.ts";
 
 describe("router", () => {
   it("répond 200 sur les deux routes de santé", () => {
@@ -51,6 +51,25 @@ describe("parseFundingInput", () => {
     const funding = parseFundingInput({ funder: "Fondation Test", amount: 5000 });
     expect(funding).not.toBeNull();
     expect(funding?.endDate).toBeNull();
+  });
+});
+
+describe("computeCoverage", () => {
+  const referenceDate = "2026-11-01";
+
+  it("vaut 0 sans financement actif à la date de référence", () => {
+    const fundings = [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }];
+    expect(computeCoverage(fundings, 4000, referenceDate)).toBe(0);
+  });
+
+  it("vaut 100 quand un financement actif couvre tout le coût mensuel", () => {
+    const fundings = [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }];
+    expect(computeCoverage(fundings, 4000, referenceDate)).toBe(100);
+  });
+
+  it("compte un financement démarré en cours du mois de référence (comparaison au mois près)", () => {
+    const fundings = [{ funder: "Nouveau bailleur", amount: 2000, startDate: "2026-11-18", endDate: null }];
+    expect(computeCoverage(fundings, 4000, referenceDate)).toBe(50);
   });
 });
 

@@ -118,25 +118,53 @@
 
 ---
 
-## Itération 4 (proposition, à valider) : calcul réel de la couverture du mois de référence
+## Itération 4 — Plan validé par le développeur le 2026-11-18 : calcul réel de la couverture du mois de référence
 
-✂️ Le point 1 de « À venir » (calcul réel + date de falaise + trous/doublons) est trop large pour une itération : `cadrage/3-solution.md` (§ « Comment ça marche ») précise que le calcul croise les financements avec un **coût mensuel chargé par poste**, un champ qui n'existe pas encore sur `Position`, et que les financements doivent s'exprimer en **% ou en mois** de couverture (aujourd'hui, l'Itération 3 n'enregistre qu'un montant en €, pas une couverture). Je découpe : cette itération ne porte que sur `referenceCoverage` du mois de référence (01/11/2026, cf. Écran 1), à partir des financements actifs ce mois-là ; la date de falaise, les trous/doublons (alerte violet) et l'horizon restent hors périmètre (prochaines itérations).
+✂️ Le point 1 de « À venir » (calcul réel + date de falaise + trous/doublons) est trop large pour une itération : `cadrage/3-solution.md` (§ « Comment ça marche ») précise que le calcul croise les financements avec un **coût mensuel chargé par poste**, un champ qui n'existe pas encore sur `Position`. Je découpe : cette itération ne porte que sur `referenceCoverage` du mois de référence (01/11/2026, cf. Écran 1), à partir des financements actifs ce mois-là ; la date de falaise, les trous/doublons (alerte violet) et l'horizon restent hors périmètre (prochaines itérations).
 
-- ❓ Point à trancher par les cadreurs avant de coder : un financement doit-il porter un **% de couverture explicite** (ex. 60 %), ou le % se déduit-il du montant saisi rapporté au coût du poste ? Les deux sont compatibles avec le prototype mais changent le formulaire de l'Itération 3 (déjà en ligne) : ajouter un champ, ou ajouter un champ coût mensuel sur le poste.
-- **Dans le périmètre (si le point ci-dessus est tranché en faveur du %)** : champ `monthlyCost` sur `Position` (donnée en dur, comme les 8 postes) ; `referenceCoverage` recalculé comme somme des % de couverture des financements actifs au 01/11/2026, plafonné à 100 ; alerte recalculée avec la même règle qu'aujourd'hui.
-- **Hors périmètre** : date de falaise recalculée, couverture horizon, détection de doublon (violet), édition/suppression d'un financement existant.
-- **Critères d'acceptation (à confirmer avec les cadreurs)** :
-  - Étant donné un poste sans financement actif au mois de référence, `referenceCoverage` vaut 0 et l'alerte est rouge.
-  - Étant donné un poste avec des financements couvrant 100 % ce mois-là, `referenceCoverage` vaut 100.
-  - Étant donné le financement ajouté en Itération 3 (P04, montant seul), il continue de s'afficher sans erreur même s'il ne contribue pas encore au calcul (migration de données en dur, pas de perte).
-- **Codage estimé** : 8-10 minutes (tendu : touche le type `Position`, `determineAlert` reste inchangée mais son entrée change de source).
-- **Fichiers prévus** : `api/src/routes.ts`, `api/src/routes.test.ts`, `frontend/src/app/postes/[id]/position-detail.tsx` (si le formulaire change).
+- **Décision prise par le développeur** : la couverture se déduit du montant du financement rapporté au coût mensuel du poste (pas de % saisi explicitement) — le formulaire de l'Itération 3 (financeur, montant, date de fin) ne change donc pas.
+- ❗️ **Conséquence signalée et acceptée** : 7 des 8 postes (tous sauf P05) n'ont aucun financement saisi dans les données en dur ; passer au calcul réel les ferait tous tomber à 0 % (rouge), cassant l'écran de démo. Le développeur a choisi un **backfill inventé** : un coût mensuel et un financement par poste, choisis pour reproduire exactement les % affichés aujourd'hui (tous à 100 % sauf P05 à 0 %). Ces montants sont fictifs, à remplacer dès que l'équipe saisira ses vraies conventions (« À venir », saisie des postes).
+- **Dans le périmètre** : champ `monthlyCost` sur `Position` ; fonction pure `computeCoverage(fundings, monthlyCost, referenceDate)` ; `referenceCoverage` recalculé pour les 8 postes à partir de leurs financements actifs au 01/11/2026, plafonné à 100 ; alerte recalculée avec la même règle qu'aujourd'hui (`determineAlert` inchangée).
+- **Hors périmètre** : date de falaise recalculée, couverture horizon, détection de doublon (violet), édition/suppression d'un financement existant, champ `monthlyCost` saisissable (reste en dur).
+- **Critères d'acceptation** :
+  - Étant donné un poste sans financement actif au mois de référence (P05), `referenceCoverage` vaut 0 et l'alerte est rouge.
+  - Étant donné un poste avec un financement couvrant tout le coût mensuel au mois de référence, `referenceCoverage` vaut 100.
+  - Étant donné un nouveau financement ajouté via le formulaire de l'Itération 3 (ex. P04), son montant contribue au calcul de `referenceCoverage` au prochain chargement de la page détail.
+- **Codage estimé** : 8-10 minutes (tendu : touche le type `Position` et les 8 lignes de données en dur).
+- **Fichiers prévus** : `api/src/routes.ts`, `api/src/routes.test.ts`.
+- **Bilan** :
+  - **Durée de codage réelle** : ~2 minutes cumulées (`.iterations/4.debut`/`.fin` pour la première passe ; un correctif a suivi hors chrono, voir ci-dessous), aucun dépassement, aucune question d'alarme posée.
+  - **Fait** :
+    - Critère 1 : P05 reste à `referenceCoverage: 0`, alerte rouge « Non couvert » (financement Lululemon expiré avant le mois de référence).
+    - Critère 2 : les 7 autres postes, avec leur financement de backfill couvrant 100 % du coût mensuel, affichent `referenceCoverage: 100`.
+    - Critère 3 : un financement ajouté via le formulaire de l'Itération 3 contribue bien au calcul (vérifié en réel sur l'API déployée, P05 : +2000 € sur un coût mensuel de 4000 € → 50 %, orange).
+  - **Bug trouvé et corrigé pendant la vérification, avant signal** : `computeCoverage` comparait les dates au jour près ; un financement saisi via le formulaire reçoit `startDate` = date du jour réel (18/11/2026 ici), postérieure au 1ᵉʳ novembre (date de référence) — il n'était donc jamais compté comme actif, un nouveau financement n'augmentait jamais la couverture affichée (contredit le critère 3). Corrigé en comparant au mois près (`YYYY-MM`), cohérent avec la granularité mensuelle du reste de l'écran ; un test dédié (`compte un financement démarré en cours du mois de référence`) couvre ce cas. Trouvé par un test manuel en conditions réelles sur le poste déployé, pas par un test unitaire — leçon pour la suite : tester un ajout de financement en conditions réelles avant de signaler, pas seulement en données fixes.
+  - **Décision d'architecture** : `referenceCoverage` n'est plus un champ stocké sur `Position` mais calculé à la volée (`withComputed`), pour éviter une double source de vérité avec les financements saisis ; remplacé par `monthlyCost` dans le type. Le champ `referenceCoverage` reste présent dans la réponse JSON (même nom), donc aucun changement côté front.
+  - **Reporté** : rien de nouveau ; date de falaise, couverture horizon et détection de doublon restent hors périmètre, déjà listées en « À venir ».
+  - **Bloqué par le harnais** : rien — contrat de déployabilité sans borne (`--construire`, Docker absent, préconisation non vérifiée comme aux itérations précédentes), `npm test` vert (16 tests), signal PM Lab accepté du premier coup.
+  - **Pollution de données hors DoD** : les financements de test ajoutés pendant la vérification (P05, P06) ont été effacés par un redéploiement (`--force-recreate`) avant le signal, pour repartir d'un état cohérent avec la démo — rappel de la conséquence actée en Itération 3 (stockage en mémoire, perdu à chaque redéploiement).
+  - **Modifications** :
+    - `api/src/routes.ts` : `monthlyCost` remplace `referenceCoverage` sur `Position` ; fonction `computeCoverage` (comparaison au mois près) ; `withComputed` factorise le calcul pour `listPositions`, `findPosition` et la route POST ; backfill des 8 postes (coût mensuel + financement, invariant les % affichés) — critères 1, 2 et 3.
+    - `api/src/routes.test.ts` : 3 tests ajoutés sur `computeCoverage` (financement expiré → 0, financement actif couvrant tout → 100, financement démarré en cours de mois de référence → 50) — DoD point 2.
+    - `e2e/demo.spec.ts` : étape de démo ajoutée (la couverture affichée change après l'ajout d'un financement) ; non rejouée depuis cette machine (même raison qu'aux itérations 2 et 3).
+
+---
+
+## Itération 5 (proposition, à valider) : date de falaise recalculée à partir des financements
+
+- **Dans le périmètre** : `cliffDate`/`monthsBeforeCliff` recalculés à partir de la première date de fin de financement actif après le mois de référence (au lieu des valeurs en dur) ; alerte inchangée (`determineAlert` prend déjà ces deux valeurs en entrée).
+- **Hors périmètre** : couverture horizon, détection de doublon (violet), trous entre deux financements consécutifs.
+- **Critères d'acceptation (à valider)** :
+  - Étant donné un poste dont le financement actif se termine dans moins de 6 mois après le mois de référence, l'alerte est orange avec le bon nombre de mois.
+  - Étant donné un poste dont le financement actif n'a pas de date de fin, `cliffDate` est `null` et l'alerte reste verte (si couvert).
+- **Codage estimé** : 8-10 minutes.
+- **Fichiers prévus** : `api/src/routes.ts`, `api/src/routes.test.ts`.
 
 ---
 
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
-1. Date de falaise recalculée, couverture horizon, détection des trous et doublons (alerte violet/chevauchement) — suite de l'Itération 4.
+1. Couverture horizon recalculée, détection des trous et doublons (alerte violet/chevauchement) — suite de l'Itération 5.
 2. Saisie des postes eux-mêmes (onglet « Postes »), remplaçant le tableau en dur `POSITIONS` — si le temps le permet, sinon les postes restent fixes pour le pitch.
 3. Accès différencié par rôle : vue lecture seule pour la responsable d'antenne, sans salaire affiché.
 4. Vue stratégique direction : projections à 12, 24 et 36 mois (I2, écrans Maestro).
