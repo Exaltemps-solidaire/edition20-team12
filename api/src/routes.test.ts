@@ -18,6 +18,17 @@ describe("router", () => {
     expect(Array.isArray(corps)).toBe(true);
     expect((corps as unknown[]).length).toBeGreaterThanOrEqual(3);
   });
+
+  it("répond 200 sur /api/v1/positions/:id avec le détail d'un poste connu", () => {
+    const { statut, corps } = router("GET", "/api/v1/positions/P05");
+    expect(statut).toBe(200);
+    expect((corps as { id: string }).id).toBe("P05");
+    expect((corps as { fundings: unknown[] }).fundings.length).toBeGreaterThan(0);
+  });
+
+  it("répond 404 sur /api/v1/positions/:id pour un poste inconnu", () => {
+    expect(router("GET", "/api/v1/positions/INCONNU").statut).toBe(404);
+  });
 });
 
 describe("determineAlert", () => {

@@ -1,9 +1,10 @@
 # Plan d'itérations — La Cloche (équipe J7BT47)
 
 - **Source du plan** : proposé par l'agent (aucun plan d'itérations trouvé dans la passation : `cadrage/6-plan-de-livraison.md` est « Pas encore produit », pas de clé `iterations` dans `passation.json`).
-- **Plan validé le 2026-11-18**, tel quel (y compris le choix par défaut I1/I2 ci-dessous).
-- **Temps restant annoncé** : ~30 minutes (au lancement de `/planifier-iterations`, le 2026-11-18) ; ~25-30 minutes confirmées au lancement de `/iteration 1`.
-- **Durée du tour de test de l'équipe** : 5 minutes.
+- **Plan validé le 2026-11-18**, tel quel (y compris le choix par défaut I1/I2 ci-dessous). **Replanification du 2026-11-18 validée** : stockage en mémoire pour l'Itération 3 confirmé, ordre de priorité du backlog confirmé inchangé.
+- **Temps restant annoncé** : ~30 minutes (au lancement de `/planifier-iterations`, le 2026-11-18) ; ~25-30 minutes confirmées au lancement de `/iteration 1` ; **50 minutes re-confirmées au lancement de cette replanification**, après clôture de l'Itération 1.
+- **Durée du tour de test de l'équipe** : 5 minutes (confirmée inchangée à la replanification).
+- **Temps restant au lancement de l'Itération 2** : 50 minutes (inchangé par rapport à la replanification précédente).
 - **Hors périmètre de cette fenêtre de build** : upload Excel, calcul réel de couverture/date de falaise, écran « Détail d'un poste », accès différencié par rôle, saisie des conventions/postes, vue stratégique direction (projections 12/24/36 mois), onglets « Justificatif financier » et « Contrôles » — voir « À venir ».
 
 ⚠️ **Capacité** : avec ~30 min restantes et un tour de test de 5 min, une itération coûte déjà environ 10 min (codage) + 5 min (publication) + 5 min (tour de test) = 20 min. Il ne reste pas assez de marge pour détailler une deuxième itération complète dans cette fenêtre : une seule itération est détaillée ci-dessous. Le temps sera redemandé au début de l'itération 1 et pourra changer ce calcul.
@@ -51,6 +52,10 @@
 
 ---
 
+⚠️ **Capacité recalculée (50 min restantes, tour de test 5 min)** : au plafond du budget (10 min codage + 5 min publication + 5 min tour de test = 20 min/itération), 50 min tiennent **2 itérations sûres** (40 min, 10 min de marge), une 3ᵉ possible mais tendue — elle dépend de rester court en codage, comme l'Itération 1 l'a montré (~3,5 min réels). Je détaille l'Itération 2 (déjà posée) et l'Itération 3 ci-dessous ; une 4ᵉ case est réservée, à trancher une fois l'Itération 3 close : itération fonctionnelle de plus si la marge tient, sinon stabilisation avant le pitch.
+
+---
+
 ## Itération 2 : écran « Détail d'un poste »
 
 - **Dans le périmètre** : depuis le tableau, cliquer une ligne ouvre une page `/postes/[id]` avec le détail du poste (financements listés, cas P05 Lyon mis en avant) ; données en dur, réutilisant `POSITIONS`.
@@ -61,14 +66,47 @@
 - **Codage estimé** : 8 minutes.
 - **Fichiers prévus** : `frontend/src/app/postes/[id]/page.tsx`, `api/src/routes.ts` (route `GET /api/v1/positions/:id`).
 - **Tests unitaires prévus** : 1-2, sur la route de détail (404 si id inconnu).
+- **Bilan** :
+  - **Durée de codage réelle** : ~3 minutes (`.iterations/2.debut`/`.fin`), sans dépassement.
+  - **Fait** :
+    - Critère 1 : chaque ligne du tableau est cliquable (`onClick` → `/postes/:id`) et ouvre la page détail du poste.
+    - Critère 2 : la page détail de P05 affiche les KPIs (couverture, date de falaise, alerte) et le financement Lululemon marqué « financement orphelin — poste vacant », reprenant le cas décrit dans `PASSATION.md` (écran 3).
+  - **Décision d'architecture** : type `Position` étendu avec `fundings: Funding[]` (hors plan initial, nécessaire pour servir le critère 2 et réutilisable telle quelle par l'Itération 3) ; route dynamique Next en export statique via `generateStaticParams()` (8 ids connus), compatible avec `output: "export"` sans changement à `nginx.conf` (`try_files` gère déjà `$uri.html`).
+  - **Reporté** : rien de nouveau ; `fundings` reste vide (`[]`) pour les 7 autres postes, pas nécessaire pour les critères de cette itération.
+  - **Bloqué par le harnais** : rien — contrat sans borne, `npm test` vert (8 tests), signal PM Lab accepté.
+  - **Découverte (hors DoD, pendant la mise à jour de la démo)** : `e2e/demo.spec.ts` échoue si rejoué avec `BASE_URL=http://localhost:8080` — attendu, pas un bug : le routage `/api/*` → 8081 est fait par la passerelle d'entrée, absente en local (nginx du front ne sert que du statique). Le script ne peut être validé qu'avec `BASE_URL=$URL_PUBLIQUE`, depuis l'extérieur. Signalé, non bloquant.
+  - **Modifications** :
+    - `api/src/routes.ts` : type `Funding`, champ `fundings` sur `Position`, données P05 (financement Lululemon orphelin), fonction `findPosition`, route `GET /api/v1/positions/:id` — critères 1 et 2.
+    - `api/src/routes.test.ts` : 2 tests ajoutés (détail 200 + 404) — DoD point 2.
+    - `frontend/src/app/postes/[id]/page.tsx` : route dynamique, `generateStaticParams`.
+    - `frontend/src/app/postes/[id]/position-detail.tsx`, `position-detail.module.css` : composant client, KPIs, liste des financements, mention « financement orphelin » — critère 2.
+    - `frontend/src/app/page.tsx`, `page.module.css` : lignes du tableau cliquables (`useRouter().push`) — critère 1.
+    - `e2e/demo.spec.ts` : étape de démo ajoutée (clic sur Lyon, financement orphelin visible).
+
+---
+
+## Itération 3 (proposition, à valider) : ajouter un financement à un poste
+
+✂️ Le point 1 de l'ancien « À venir » (« saisie des conventions et des postes ») est trop large pour une itération : deux écrans/onglets, et il mélange saisie et recalcul. Je le découpe. Cette itération ne couvre que l'ajout d'un financement à un poste existant (les postes restent ceux d'`api/src/routes.ts`, pas de création de poste) ; le recalcul réel de couverture reste hors périmètre (prochaine itération).
+
+**Stockage, décision prise et validée par le développeur le 2026-11-18** : en mémoire, dans le process API (tableau à côté de `POSITIONS`) — voir `adr.md`. ❗️ Conséquence à garder en tête pour la suite : chaque redéploiement (`--force-recreate`) perd les financements saisis pendant le tour de test précédent ; la démo de l'Itération 4 (calcul réel) devra re-saisir un financement juste après déploiement, ou cette itération-là sèmera une donnée de départ.
+
+- **Dans le périmètre** : formulaire minimal sur la page détail (Itération 2) pour ajouter un financement (financeur, montant ou %, date de fin) ; stockage en mémoire côté API ; le financement ajouté apparaît dans le détail du poste.
+- **Hors périmètre** : recalcul automatique de la couverture/alerte à partir des financements saisis (prochaine itération), création/édition de poste, validation avancée, persistance durable.
+- **Critères d'acceptation** :
+  - Étant donné la page détail d'un poste, quand je soumets le formulaire avec un financeur et un montant, alors le financement apparaît dans la liste du poste.
+  - Étant donné un formulaire soumis sans financeur, alors une erreur de validation s'affiche et rien n'est ajouté.
+- **Codage estimé** : 8 minutes.
+- **Fichiers prévus** : `api/src/routes.ts` (route `POST /api/v1/positions/:id/financements`), `frontend/src/app/postes/[id]/page.tsx` (formulaire).
+- **Tests unitaires prévus** : 1-2, sur la validation (financeur manquant rejeté, ajout valide accepté).
 - **Bilan** : _à remplir en fin d'itération._
 
 ---
 
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
-1. Saisie des conventions (onglet « Financements ») et des postes (onglet « Postes »), remplaçant les données en dur.
-2. Calcul réel du taux de couverture et de la date de falaise à partir des données saisies ; détection des trous et doublons (alerte violet/chevauchement, reportée de l'itération 1).
+1. Calcul réel du taux de couverture et de la date de falaise à partir des financements saisis ; détection des trous et doublons (alerte violet/chevauchement, reportée de l'itération 1).
+2. Saisie des postes eux-mêmes (onglet « Postes »), remplaçant le tableau en dur `POSITIONS` — si le temps le permet, sinon les postes restent fixes pour le pitch.
 3. Accès différencié par rôle : vue lecture seule pour la responsable d'antenne, sans salaire affiché.
 4. Vue stratégique direction : projections à 12, 24 et 36 mois (I2, écrans Maestro).
 5. Onglets « Justificatif financier » et « Contrôles » — ❓ aucune photo ne les montre dans la passation : à clarifier avec les cadreurs avant de les construire (périmètre incertain).

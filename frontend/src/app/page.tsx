@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
@@ -17,6 +18,7 @@ type Position = {
 };
 
 export default function Home() {
+  const router = useRouter();
   const [positions, setPositions] = useState<Position[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +55,11 @@ export default function Home() {
           </thead>
           <tbody>
             {positions.map((position) => (
-              <tr key={position.id}>
+              <tr
+                key={position.id}
+                onClick={() => router.push(`/postes/${position.id}`)}
+                className={styles.row}
+              >
                 <td>
                   <span className={`${styles.dot} ${styles[position.alert.color]}`} />
                   {position.alert.label}

@@ -12,4 +12,10 @@ test("Démo : le cas passant", async ({ page }) => {
     await expect(page.getByRole("table")).toBeVisible();
     await expect(page.getByText("Non couvert")).toBeVisible();
   });
+
+  await test.step("Je clique sur le poste de Lyon et je vois le financement orphelin", async () => {
+    await page.getByRole("row", { name: /Lyon/ }).click();
+    await expect(page.getByRole("heading", { name: /Lyon/ })).toBeVisible();
+    await expect(page.getByText("financement orphelin")).toBeVisible();
+  });
 });
