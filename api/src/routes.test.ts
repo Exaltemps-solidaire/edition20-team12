@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCliff, computeCoverage, determineAlert, parseFundingInput, router } from "./routes.ts";
+import { computeCliff, computeCoverage, computeHorizonCoverage, determineAlert, parseFundingInput, router } from "./routes.ts";
 
 describe("router", () => {
   it("répond 200 sur les deux routes de santé", () => {
@@ -89,6 +89,21 @@ describe("computeCliff", () => {
   it("ignore la date de fin d'un financement déjà expiré au mois de référence", () => {
     const fundings = [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }];
     expect(computeCliff(fundings, referenceDate)).toEqual({ cliffDate: null, monthsBeforeCliff: null });
+  });
+});
+
+describe("computeHorizonCoverage", () => {
+  const horizonStart = "2026-01";
+  const horizonEnd = "2027-12";
+
+  it("vaut 100 quand un financement couvre tout l'horizon sans interruption", () => {
+    const fundings = [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }];
+    expect(computeHorizonCoverage(fundings, 4000, horizonStart, horizonEnd)).toBe(100);
+  });
+
+  it("vaut la part de l'horizon couverte par un financement qui s'arrête en cours d'horizon", () => {
+    const fundings = [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }];
+    expect(computeHorizonCoverage(fundings, 4000, horizonStart, horizonEnd)).toBe(25);
   });
 });
 

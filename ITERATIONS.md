@@ -178,9 +178,37 @@
 
 ---
 
+## Itération 6 — Plan validé par le développeur le 2026-11-18 : couverture horizon recalculée à partir des financements
+
+✂️ Le point 1 de « À venir » (couverture horizon + détection des trous et doublons) est trop large pour les 20 minutes restantes annoncées au lancement. Je ne garde que la couverture horizon ; la détection de doublons/trous (alerte violette) reste hors périmètre, reportée.
+
+- **Dans le périmètre** : `horizonCoverage` recalculé (au lieu de la valeur en dur) via une fonction pure `computeHorizonCoverage(fundings, monthlyCost, horizonStart, horizonEnd)` = moyenne de la couverture mensuelle (même règle que `computeCoverage`, plafonnée à 100) sur tous les mois de l'horizon fixe 01/2026–12/2027 (Écran 1).
+- **Hors périmètre** : détection de doublon/chevauchement (violet), horizon saisissable (reste en dur), trous entre financements consécutifs.
+- **Critères d'acceptation** :
+  - Un poste couvert à 100% sur tout l'horizon (financement actif sans interruption de 01/2026 à 12/2027) → `horizonCoverage` = 100.
+  - P05 (financement actif seulement 01/2026–06/2026, soit 6 des 24 mois de l'horizon) → `horizonCoverage` = 25.
+  - Un financement ajouté qui étend la couverture sur des mois de l'horizon augmente `horizonCoverage` au chargement suivant.
+- **Codage estimé** : 5 minutes (budget réduit, 20 minutes totales annoncées sans marge).
+- **Fichiers prévus** : `api/src/routes.ts`, `api/src/routes.test.ts`.
+- **Bilan** :
+  - **Durée de codage réelle** : ~1 minute (`.iterations/6.debut`/`.fin`), très en dessous du budget réduit de 5 minutes, aucun dépassement, aucune question d'alarme posée.
+  - **Fait** :
+    - Critère 1 : vérifié en réel — P02 (financement actif sans interruption sur tout l'horizon) renvoie `horizonCoverage: 100`.
+    - Critère 2 : vérifié en réel — P05 (financement actif seulement 01/2026-06/2026) renvoie `horizonCoverage: 25`.
+    - Critère 3 : vérifié en réel — un financement de test ajouté à P05 (01/2027-12/2027) fait passer `horizonCoverage` de 25 à 83 ; financement retiré par un redéploiement avant le signal (stockage en mémoire, cf. Itération 3).
+  - **Décision d'architecture** : `horizonCoverage` suit le même principe que `referenceCoverage`/`cliffDate` (calcul à la volée, pas de double source de vérité) — moyenne de `computeCoverage` sur chacun des 24 mois de l'horizon fixe 01/2026-12/2027.
+  - **Reporté** : rien de nouveau ; détection des trous et doublons (alerte violette) reste hors périmètre, reportée en « À venir » point 1.
+  - **Bloqué par le harnais** : rien — contrat de déployabilité sans borne (Docker absent, podman seul disponible), `npm test` vert (19 tests), signal PM Lab accepté du premier coup.
+  - **Modifications** :
+    - `api/src/routes.ts` : type `Position` perd `horizonCoverage` en champ stocké ; fonctions `monthsInRange` et `computeHorizonCoverage` (moyenne de `computeCoverage` sur l'horizon) ; `withComputed` les calcule à la volée — critères 1, 2 et 3.
+    - `api/src/routes.test.ts` : 2 tests ajoutés sur `computeHorizonCoverage` (couverture totale, couverture partielle) — DoD point 2.
+  - **Démo non mise à jour** : `e2e/demo.spec.ts` inchangé pour cette itération, budget de 20 minutes totales trop serré pour l'ajouter sans risquer la publication ; la colonne « Couverture horizon » change de valeur mais reste visible dans l'étape de démo existante (tableau).
+
+---
+
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
-1. Couverture horizon recalculée, détection des trous et doublons (alerte violet/chevauchement) — suite de l'Itération 5.
+1. Détection des trous et doublons entre financements (alerte violet/chevauchement) — suite de l'Itération 6.
 2. Saisie des postes eux-mêmes (onglet « Postes »), remplaçant le tableau en dur `POSITIONS` — si le temps le permet, sinon les postes restent fixes pour le pitch.
 3. Accès différencié par rôle : vue lecture seule pour la responsable d'antenne, sans salaire affiché.
 4. Vue stratégique direction : projections à 12, 24 et 36 mois (I2, écrans Maestro).

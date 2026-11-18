@@ -11,13 +11,15 @@ export type Position = {
   title: string;
   branch: string;
   monthlyCost: number;
-  horizonCoverage: number;
   fundings: Funding[];
 };
 
-// Date de référence du tableau de bord (Écran 1 de la passation : 01/11/2026).
-// La couverture horizon reste hors périmètre (voir ITERATIONS.md, Itération 5).
+// Date de référence et horizon d'analyse du tableau de bord (Écran 1 de la
+// passation : référence 01/11/2026, horizon 01/2026-12/2027). L'horizon reste
+// fixe (non saisissable) pour cette itération.
 const REFERENCE_DATE = "2026-11-01";
+const HORIZON_START_MONTH = "2026-01";
+const HORIZON_END_MONTH = "2027-12";
 
 function isActive(f: Funding, referenceMonth: string): boolean {
   return f.startDate.slice(0, 7) <= referenceMonth && (f.endDate === null || f.endDate.slice(0, 7) >= referenceMonth);
@@ -51,6 +53,29 @@ export function computeCliff(fundings: Funding[], referenceDate: string): { clif
   return { cliffDate, monthsBeforeCliff };
 }
 
+function monthsInRange(startMonth: string, endMonth: string): string[] {
+  const months: string[] = [];
+  let [year, month] = startMonth.split("-").map(Number);
+  const [endYear, endMonth2] = endMonth.split("-").map(Number);
+  while (year < endYear || (year === endYear && month <= endMonth2)) {
+    months.push(`${year}-${String(month).padStart(2, "0")}`);
+    month++;
+    if (month > 12) {
+      month = 1;
+      year++;
+    }
+  }
+  return months;
+}
+
+// Couverture horizon : moyenne de la couverture mensuelle (même règle que
+// computeCoverage) sur tous les mois de l'horizon d'analyse (Écran 1).
+export function computeHorizonCoverage(fundings: Funding[], monthlyCost: number, horizonStartMonth: string, horizonEndMonth: string): number {
+  const months = monthsInRange(horizonStartMonth, horizonEndMonth);
+  const total = months.reduce((sum, month) => sum + computeCoverage(fundings, monthlyCost, `${month}-01`), 0);
+  return Math.round(total / months.length);
+}
+
 export type Alert = { color: "red" | "orange" | "green"; label: string };
 
 // Rule from screen 2 (sketch): not covered this month = red; cliff within 6
@@ -73,22 +98,23 @@ export function determineAlert(referenceCoverage: number, monthsBeforeCliff: num
 // cliff dates the sketch showed, now that both are computed instead of stored —
 // see ITERATIONS.md, Itérations 4 et 5, for why and what replaces them later.
 const POSITIONS: Position[] = [
-  { id: "P01", title: "Délégué·e générale", branch: "Siège", monthlyCost: 4000, horizonCoverage: 75, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
-  { id: "P02", title: "Resp. administratif·ve et financier·e", branch: "Siège", monthlyCost: 4000, horizonCoverage: 100, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
-  { id: "P03", title: "Directrice développement & partenariats", branch: "Siège", monthlyCost: 4000, horizonCoverage: 81.25, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
-  { id: "P04", title: "Responsable d'antenne", branch: "Paris", monthlyCost: 4000, horizonCoverage: 77.38, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
+  { id: "P01", title: "Délégué·e générale", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
+  { id: "P02", title: "Resp. administratif·ve et financier·e", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
+  { id: "P03", title: "Directrice développement & partenariats", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
+  { id: "P04", title: "Responsable d'antenne", branch: "Paris", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
   // Case from the passation sketch (screen 3): Salarié·e E left 2026-06-30, Salarié·e F
   // arrives 2026-09-01, the Lululemon funding ended with the departure and is now orphaned.
-  { id: "P05", title: "Responsable d'antenne", branch: "Lyon", monthlyCost: 4000, horizonCoverage: 27.87, fundings: [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }] },
-  { id: "P06", title: "Chargé·e de projet alimentation", branch: "Paris", monthlyCost: 4000, horizonCoverage: 81.25, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
-  { id: "P07", title: "Animateur·rice Le Carillon", branch: "Bordeaux", monthlyCost: 4000, horizonCoverage: 50, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
-  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, horizonCoverage: 100, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
+  { id: "P05", title: "Responsable d'antenne", branch: "Lyon", monthlyCost: 4000, fundings: [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }] },
+  { id: "P06", title: "Chargé·e de projet alimentation", branch: "Paris", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
+  { id: "P07", title: "Animateur·rice Le Carillon", branch: "Bordeaux", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
+  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
 ];
 
-function withComputed(position: Position): Position & { referenceCoverage: number; cliffDate: string | null; monthsBeforeCliff: number | null; alert: Alert } {
+function withComputed(position: Position): Position & { referenceCoverage: number; cliffDate: string | null; monthsBeforeCliff: number | null; horizonCoverage: number; alert: Alert } {
   const referenceCoverage = computeCoverage(position.fundings, position.monthlyCost, REFERENCE_DATE);
   const { cliffDate, monthsBeforeCliff } = computeCliff(position.fundings, REFERENCE_DATE);
-  return { ...position, referenceCoverage, cliffDate, monthsBeforeCliff, alert: determineAlert(referenceCoverage, monthsBeforeCliff) };
+  const horizonCoverage = computeHorizonCoverage(position.fundings, position.monthlyCost, HORIZON_START_MONTH, HORIZON_END_MONTH);
+  return { ...position, referenceCoverage, cliffDate, monthsBeforeCliff, horizonCoverage, alert: determineAlert(referenceCoverage, monthsBeforeCliff) };
 }
 
 function listPositions() {
