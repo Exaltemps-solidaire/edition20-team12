@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCliff, computeCoverage, computeHorizonCoverage, determineAlert, hasOverlap, parseFundingInput, router } from "./routes.ts";
+import { computeCliff, computeCoverage, computeHorizonCoverage, computeOverlapMonths, determineAlert, hasOverlap, parseFundingInput, router } from "./routes.ts";
 
 describe("router", () => {
   it("répond 200 sur les deux routes de santé", () => {
@@ -121,6 +121,24 @@ describe("hasOverlap", () => {
   it("ne détecte rien avec un seul financement actif", () => {
     const fundings = [{ funder: "A", amount: 4000, startDate: "2026-01-01", endDate: null }];
     expect(hasOverlap(fundings, referenceMonth)).toBe(false);
+  });
+});
+
+describe("computeOverlapMonths", () => {
+  const horizonStart = "2026-01";
+  const horizonEnd = "2027-12";
+
+  it("vaut 0 sans chevauchement sur l'horizon", () => {
+    const fundings = [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }];
+    expect(computeOverlapMonths(fundings, horizonStart, horizonEnd)).toBe(0);
+  });
+
+  it("compte les mois où deux financements sont actifs en même temps", () => {
+    const fundings = [
+      { funder: "A", amount: 4000, startDate: "2026-01-01", endDate: null },
+      { funder: "B", amount: 1000, startDate: "2026-01-01", endDate: null },
+    ];
+    expect(computeOverlapMonths(fundings, horizonStart, horizonEnd)).toBe(24);
   });
 });
 

@@ -252,6 +252,30 @@
   - **Démo non mise à jour** : `e2e/demo.spec.ts` inchangé — les sélecteurs existants (texte, structure du tableau) restent valides, seul l'habillage CSS change.
   - Déployé (`podman build`/`push`/`compose up -d --force-recreate frontend`), vérifié via `curl localhost:8080/` (nouveau JS présent) et `curl localhost:8081/health`.
 
+---
+
+## Itération 9 — Lancée en one-shot par le développeur le 2026-11-18 : écran « Détail d'un poste » aligné sur le prototype (Écran 3)
+
+- **Déclencheur** : comparaison de l'Écran 3 (`passation/croquis/ecran-03-le-détail-d-un-poste...png`) et du prototype PM Lab avec le rendu réel de la page `/postes/[id]`.
+- **Dans le périmètre** :
+  - Nouvelle métrique métier `computeOverlapMonths(fundings, horizonStart, horizonEnd)` : nombre de mois de l'horizon où plus d'un financement est actif (KPI « Mois en doublon » de l'Écran 3), exposée dans `overlapMonths` via `withComputed`.
+  - Refonte visuelle : titre + barre d'onglets (comme l'Écran 2, « Détail d'un poste » actif), sélecteur de poste (liste déroulante remplaçant tous les postes, navigue vers `/postes/:id`), 4 cartes KPI (Couverture mois réf., Date de falaise, Mois en doublon, Alerte avec gros point coloré), bandeau d'alerte « financement orphelin » restylé (fond rosé, comme le prototype).
+- **Hors périmètre, signalé explicitement (❗️)** : le graphique « Qui paie quoi, mois par mois » et le tableau « Historique d'occupation » (personnes ayant occupé le poste, dates d'arrivée/départ) de l'Écran 3 **ne sont pas reproduits** — ils exigent un modèle de données absent de l'application (occupants d'un poste avec dates), que `Position`/`Funding` ne portent pas. Ce n'est pas un oubli de style : ajouter ces données serait inventer une fonctionnalité non présente dans la passation actuelle (cf. règle « ne jamais inventer » du CLAUDE.md). À reprendre en tant qu'itération dédiée si les cadreurs valident le besoin.
+- **Critères d'acceptation** :
+  1. P05 (cas de référence de la maquette) affiche Couverture mois réf. 0%, Date de falaise "Non couvert", Mois en doublon 0, Alerte rouge "Non couvert" — vérifié en réel sur l'API déployée.
+  2. Le sélecteur de poste permet de naviguer vers un autre poste sans repasser par le tableau.
+  3. `computeOverlapMonths` est testé (0 sans chevauchement, total des mois de l'horizon en cas de chevauchement total) et `npm test` passe.
+- **Bilan** :
+  - Codage non chronométré, exécuté en one-shot à la demande du développeur (même écart assumé qu'à l'Itération 8).
+  - Les 3 critères sont vérifiés (24 tests `npm test` dont 2 nouveaux sur `computeOverlapMonths` ; P05 vérifié en réel après déploiement ; sélecteur fonctionnel).
+  - Contrat de déployabilité : aucune borne. Build frontend et API propres.
+  - **Modifications** :
+    - `api/src/routes.ts` : fonction `computeOverlapMonths` ; champ `overlapMonths` ajouté à la sortie de `withComputed`.
+    - `api/src/routes.test.ts` : 2 tests sur `computeOverlapMonths`.
+    - `frontend/src/app/postes/[id]/position-detail.tsx` : titre + barre d'onglets, sélecteur de poste (fetch `/api/v1/positions` pour la liste), cartes KPI, bandeau orphelin restylé ; la liste des financements perd l'étiquette inline « orphelin » (remplacée par le bandeau dédié, qui porte la même information).
+    - `frontend/src/app/postes/[id]/position-detail.module.css` : classes `selectWrap`, `kpiCard`, `alertDot`, `orphanBanner`.
+  - **Démo non mise à jour** : `e2e/demo.spec.ts` inchangé — le sélecteur de poste et les nouvelles cartes KPI ne sont pas couverts par la démo existante, à ajouter si le temps le permet dans une itération dédiée.
+
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
 1. Détection des trous entre financements consécutifs — suite de l'Itération 7.

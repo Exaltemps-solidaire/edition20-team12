@@ -85,6 +85,12 @@ export function hasOverlap(fundings: Funding[], referenceMonth: string): boolean
   return fundings.filter((f) => isActive(f, referenceMonth)).length > 1;
 }
 
+// Mois en doublon : nombre de mois de l'horizon où plus d'un financement est actif
+// (Écran 3 de la passation, KPI "Mois en doublon").
+export function computeOverlapMonths(fundings: Funding[], horizonStartMonth: string, horizonEndMonth: string): number {
+  return monthsInRange(horizonStartMonth, horizonEndMonth).filter((month) => hasOverlap(fundings, month)).length;
+}
+
 // Rule from screen 2 (sketch): not covered this month = red; overlap = purple;
 // cliff within 6 months = orange; otherwise green.
 export function determineAlert(referenceCoverage: number, monthsBeforeCliff: number | null, overlap = false): Alert {
@@ -120,12 +126,13 @@ const POSITIONS: Position[] = [
   { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }, { funder: "Fondation complémentaire", amount: 1000, startDate: "2026-01-01", endDate: null }] },
 ];
 
-function withComputed(position: Position): Position & { referenceCoverage: number; cliffDate: string | null; monthsBeforeCliff: number | null; horizonCoverage: number; alert: Alert } {
+function withComputed(position: Position): Position & { referenceCoverage: number; cliffDate: string | null; monthsBeforeCliff: number | null; horizonCoverage: number; overlapMonths: number; alert: Alert } {
   const referenceCoverage = computeCoverage(position.fundings, position.monthlyCost, REFERENCE_DATE);
   const { cliffDate, monthsBeforeCliff } = computeCliff(position.fundings, REFERENCE_DATE);
   const horizonCoverage = computeHorizonCoverage(position.fundings, position.monthlyCost, HORIZON_START_MONTH, HORIZON_END_MONTH);
   const overlap = hasOverlap(position.fundings, REFERENCE_DATE.slice(0, 7));
-  return { ...position, referenceCoverage, cliffDate, monthsBeforeCliff, horizonCoverage, alert: determineAlert(referenceCoverage, monthsBeforeCliff, overlap) };
+  const overlapMonths = computeOverlapMonths(position.fundings, HORIZON_START_MONTH, HORIZON_END_MONTH);
+  return { ...position, referenceCoverage, cliffDate, monthsBeforeCliff, horizonCoverage, overlapMonths, alert: determineAlert(referenceCoverage, monthsBeforeCliff, overlap) };
 }
 
 function listPositions() {

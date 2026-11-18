@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import pageStyles from "../../page.module.css";
 import styles from "./position-detail.module.css";
@@ -17,12 +17,17 @@ type Position = {
   horizonCoverage: number;
   cliffDate: string | null;
   monthsBeforeCliff: number | null;
+  overlapMonths: number;
   fundings: Funding[];
   alert: Alert;
 };
 
+type PositionSummary = { id: string; title: string; branch: string };
+
 export default function PositionDetail({ id }: { id: string }) {
+  const router = useRouter();
   const [position, setPosition] = useState<Position | null | undefined>(undefined);
+  const [allPositions, setAllPositions] = useState<PositionSummary[]>([]);
   const [funder, setFunder] = useState("");
   const [amount, setAmount] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -38,6 +43,13 @@ export default function PositionDetail({ id }: { id: string }) {
       .then(setPosition)
       .catch(() => setPosition(null));
   }, [id]);
+
+  useEffect(() => {
+    fetch("/api/v1/positions")
+      .then((response) => (response.ok ? response.json() : []))
+      .then(setAllPositions)
+      .catch(() => setAllPositions([]));
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -61,48 +73,70 @@ export default function PositionDetail({ id }: { id: string }) {
     setEndDate("");
   }
 
+  const orphanedFunding = position?.fundings.find((f) => f.endDate !== null && position.referenceCoverage === 0);
+
   return (
     <main className={pageStyles.page}>
-      <p><Link href="/">&larr; Retour au tableau des postes</Link></p>
+      <h1 className={pageStyles.pageTitle}>Financement des postes</h1>
+
+      <nav className={pageStyles.tabNav}>
+        <button type="button" className={pageStyles.tabBtn} disabled>📊 Vue d&apos;ensemble</button>
+        <button type="button" className={pageStyles.tabBtn} onClick={() => router.push("/")}>📋 Postes</button>
+        <button type="button" className={`${pageStyles.tabBtn} ${pageStyles.tabBtnActive}`}>🔍 Détail d&apos;un poste</button>
+        <button type="button" className={pageStyles.tabBtn} disabled>📄 Tableau de bord Direction</button>
+      </nav>
+
+      <div className={styles.selectWrap}>
+        <label htmlFor="poste-select">Poste</label>
+        <select id="poste-select" value={id} onChange={(e) => router.push(`/postes/${e.target.value}`)}>
+          {allPositions.map((p) => (
+            <option key={p.id} value={p.id}>{p.id} – {p.title} ({p.branch})</option>
+          ))}
+        </select>
+      </div>
 
       {position === undefined && <p>Chargement…</p>}
       {position === null && <p className={pageStyles.error}>Poste introuvable.</p>}
 
       {position && (
         <>
-          <h1>{position.title} — {position.branch}</h1>
-
           <dl className={styles.kpis}>
-            <div>
+            <div className={styles.kpiCard}>
               <dt>Couverture mois réf.</dt>
               <dd>{position.referenceCoverage}%</dd>
             </div>
-            <div>
+            <div className={styles.kpiCard}>
               <dt>Date de falaise</dt>
               <dd>{position.cliffDate ?? "Non couvert"}</dd>
             </div>
-            <div>
+            <div className={styles.kpiCard}>
+              <dt>Mois en doublon</dt>
+              <dd>{position.overlapMonths}</dd>
+            </div>
+            <div className={styles.kpiCard}>
               <dt>Alerte</dt>
               <dd>
-                <span className={`${pageStyles.dot} ${pageStyles[position.alert.color]}`} />
+                <span className={`${pageStyles.dot} ${styles.alertDot} ${pageStyles[position.alert.color]}`} />
                 {position.alert.label}
               </dd>
             </div>
           </dl>
 
+          {orphanedFunding && (
+            <p className={styles.orphanBanner}>
+              ⚠ Financement orphelin : {orphanedFunding.funder} verse {orphanedFunding.amount} € pour une personne qui n&apos;occupe plus le poste.
+            </p>
+          )}
+
           <h2>Financements</h2>
           {position.fundings.length === 0 && <p>Aucun financement saisi.</p>}
           {position.fundings.length > 0 && (
             <ul>
-              {position.fundings.map((funding, index) => {
-                const orphaned = funding.endDate !== null && position.referenceCoverage === 0;
-                return (
-                  <li key={index}>
-                    {funding.funder} : {funding.amount} € — {funding.startDate} → {funding.endDate ?? "en cours"}
-                    {orphaned && <strong className={styles.orphaned}> (financement orphelin — poste vacant)</strong>}
-                  </li>
-                );
-              })}
+              {position.fundings.map((funding, index) => (
+                <li key={index}>
+                  {funding.funder} : {funding.amount} € — {funding.startDate} → {funding.endDate ?? "en cours"}
+                </li>
+              ))}
             </ul>
           )}
 
