@@ -13,6 +13,11 @@ test("Démo : le cas passant", async ({ page }) => {
     await expect(page.getByText("Non couvert")).toBeVisible();
   });
 
+  await test.step("Je vois la date de falaise recalculée pour un poste bientôt à découvert", async () => {
+    await expect(page.getByRole("row", { name: /P01/ })).toContainText("Falaise < 6 mois");
+    await expect(page.getByRole("row", { name: /P01/ })).toContainText("2026-12-31");
+  });
+
   await test.step("Je clique sur le poste de Lyon et je vois le financement orphelin", async () => {
     await page.getByRole("row", { name: /Lyon/ }).click();
     await expect(page.getByRole("heading", { name: /Lyon/ })).toBeVisible();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCoverage, determineAlert, parseFundingInput, router } from "./routes.ts";
+import { computeCliff, computeCoverage, determineAlert, parseFundingInput, router } from "./routes.ts";
 
 describe("router", () => {
   it("répond 200 sur les deux routes de santé", () => {
@@ -70,6 +70,25 @@ describe("computeCoverage", () => {
   it("compte un financement démarré en cours du mois de référence (comparaison au mois près)", () => {
     const fundings = [{ funder: "Nouveau bailleur", amount: 2000, startDate: "2026-11-18", endDate: null }];
     expect(computeCoverage(fundings, 4000, referenceDate)).toBe(50);
+  });
+});
+
+describe("computeCliff", () => {
+  const referenceDate = "2026-11-01";
+
+  it("retient la fin la plus proche parmi les financements actifs, à moins de 6 mois", () => {
+    const fundings = [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }];
+    expect(computeCliff(fundings, referenceDate)).toEqual({ cliffDate: "2026-12-31", monthsBeforeCliff: 1 });
+  });
+
+  it("vaut null sans date de fin parmi les financements actifs", () => {
+    const fundings = [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }];
+    expect(computeCliff(fundings, referenceDate)).toEqual({ cliffDate: null, monthsBeforeCliff: null });
+  });
+
+  it("ignore la date de fin d'un financement déjà expiré au mois de référence", () => {
+    const fundings = [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }];
+    expect(computeCliff(fundings, referenceDate)).toEqual({ cliffDate: null, monthsBeforeCliff: null });
   });
 });
 

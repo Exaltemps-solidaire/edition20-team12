@@ -12,14 +12,16 @@ export type Position = {
   branch: string;
   monthlyCost: number;
   horizonCoverage: number;
-  cliffDate: string | null;
-  monthsBeforeCliff: number | null;
   fundings: Funding[];
 };
 
 // Date de référence du tableau de bord (Écran 1 de la passation : 01/11/2026).
-// La couverture horizon et la date de falaise restent hors périmètre (voir ITERATIONS.md, Itération 4).
+// La couverture horizon reste hors périmètre (voir ITERATIONS.md, Itération 5).
 const REFERENCE_DATE = "2026-11-01";
+
+function isActive(f: Funding, referenceMonth: string): boolean {
+  return f.startDate.slice(0, 7) <= referenceMonth && (f.endDate === null || f.endDate.slice(0, 7) >= referenceMonth);
+}
 
 // Somme des financements actifs à la date de référence, rapportée au coût mensuel
 // du poste (cadrage/3-solution.md : "le tableur croise automatiquement les deux").
@@ -28,9 +30,25 @@ const REFERENCE_DATE = "2026-11-01";
 export function computeCoverage(fundings: Funding[], monthlyCost: number, referenceDate: string): number {
   if (monthlyCost <= 0) return 0;
   const referenceMonth = referenceDate.slice(0, 7);
-  const active = fundings.filter((f) => f.startDate.slice(0, 7) <= referenceMonth && (f.endDate === null || f.endDate.slice(0, 7) >= referenceMonth));
-  const total = active.reduce((sum, f) => sum + f.amount, 0);
+  const total = fundings.filter((f) => isActive(f, referenceMonth)).reduce((sum, f) => sum + f.amount, 0);
   return Math.min(100, Math.round((total / monthlyCost) * 100));
+}
+
+// Date de falaise : fin la plus proche parmi les financements actifs au mois de
+// référence (un financement déjà expiré ne menace plus rien, il est déjà compté
+// dans la couverture à 0). Pas de date de fin parmi les actifs → pas de falaise prévisible.
+export function computeCliff(fundings: Funding[], referenceDate: string): { cliffDate: string | null; monthsBeforeCliff: number | null } {
+  const referenceMonth = referenceDate.slice(0, 7);
+  const endings = fundings
+    .filter((f) => isActive(f, referenceMonth) && f.endDate !== null)
+    .map((f) => f.endDate as string)
+    .sort();
+  if (endings.length === 0) return { cliffDate: null, monthsBeforeCliff: null };
+  const cliffDate = endings[0];
+  const [refYear, refMonth] = referenceMonth.split("-").map(Number);
+  const [cliffYear, cliffMonth] = cliffDate.slice(0, 7).split("-").map(Number);
+  const monthsBeforeCliff = (cliffYear - refYear) * 12 + (cliffMonth - refMonth);
+  return { cliffDate, monthsBeforeCliff };
 }
 
 export type Alert = { color: "red" | "orange" | "green"; label: string };
@@ -51,31 +69,33 @@ export function determineAlert(referenceCoverage: number, monthsBeforeCliff: num
 // Hardcoded data taken from the screen 2 sketch, until agreement/position entry
 // is wired up (see ITERATIONS.md, "À venir"). monthlyCost and fundings are
 // invented (iteration 4 backfill) to reproduce the reference-coverage percentages
-// the sketch showed, now that coverage is computed instead of stored — see
-// ITERATIONS.md, Itération 4, for why and what replaces them later.
+// the sketch showed ; funding end dates (iteration 5 backfill) reproduce the
+// cliff dates the sketch showed, now that both are computed instead of stored —
+// see ITERATIONS.md, Itérations 4 et 5, for why and what replaces them later.
 const POSITIONS: Position[] = [
-  { id: "P01", title: "Délégué·e générale", branch: "Siège", monthlyCost: 4000, horizonCoverage: 75, cliffDate: "2026-12-31", monthsBeforeCliff: 2, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
-  { id: "P02", title: "Resp. administratif·ve et financier·e", branch: "Siège", monthlyCost: 4000, horizonCoverage: 100, cliffDate: null, monthsBeforeCliff: null, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
-  { id: "P03", title: "Directrice développement & partenariats", branch: "Siège", monthlyCost: 4000, horizonCoverage: 81.25, cliffDate: "2027-03-31", monthsBeforeCliff: 5, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
-  { id: "P04", title: "Responsable d'antenne", branch: "Paris", monthlyCost: 4000, horizonCoverage: 77.38, cliffDate: "2026-12-31", monthsBeforeCliff: 2, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
+  { id: "P01", title: "Délégué·e générale", branch: "Siège", monthlyCost: 4000, horizonCoverage: 75, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
+  { id: "P02", title: "Resp. administratif·ve et financier·e", branch: "Siège", monthlyCost: 4000, horizonCoverage: 100, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
+  { id: "P03", title: "Directrice développement & partenariats", branch: "Siège", monthlyCost: 4000, horizonCoverage: 81.25, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
+  { id: "P04", title: "Responsable d'antenne", branch: "Paris", monthlyCost: 4000, horizonCoverage: 77.38, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
   // Case from the passation sketch (screen 3): Salarié·e E left 2026-06-30, Salarié·e F
   // arrives 2026-09-01, the Lululemon funding ended with the departure and is now orphaned.
-  { id: "P05", title: "Responsable d'antenne", branch: "Lyon", monthlyCost: 4000, horizonCoverage: 27.87, cliffDate: null, monthsBeforeCliff: 0, fundings: [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }] },
-  { id: "P06", title: "Chargé·e de projet alimentation", branch: "Paris", monthlyCost: 4000, horizonCoverage: 81.25, cliffDate: "2027-03-31", monthsBeforeCliff: 5, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
-  { id: "P07", title: "Animateur·rice Le Carillon", branch: "Bordeaux", monthlyCost: 4000, horizonCoverage: 50, cliffDate: "2026-12-31", monthsBeforeCliff: 2, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
-  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, horizonCoverage: 100, cliffDate: null, monthsBeforeCliff: null, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
+  { id: "P05", title: "Responsable d'antenne", branch: "Lyon", monthlyCost: 4000, horizonCoverage: 27.87, fundings: [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }] },
+  { id: "P06", title: "Chargé·e de projet alimentation", branch: "Paris", monthlyCost: 4000, horizonCoverage: 81.25, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
+  { id: "P07", title: "Animateur·rice Le Carillon", branch: "Bordeaux", monthlyCost: 4000, horizonCoverage: 50, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
+  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, horizonCoverage: 100, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
 ];
 
-function withComputed(position: Position): Position & { referenceCoverage: number; alert: Alert } {
+function withComputed(position: Position): Position & { referenceCoverage: number; cliffDate: string | null; monthsBeforeCliff: number | null; alert: Alert } {
   const referenceCoverage = computeCoverage(position.fundings, position.monthlyCost, REFERENCE_DATE);
-  return { ...position, referenceCoverage, alert: determineAlert(referenceCoverage, position.monthsBeforeCliff) };
+  const { cliffDate, monthsBeforeCliff } = computeCliff(position.fundings, REFERENCE_DATE);
+  return { ...position, referenceCoverage, cliffDate, monthsBeforeCliff, alert: determineAlert(referenceCoverage, monthsBeforeCliff) };
 }
 
-function listPositions(): (Position & { referenceCoverage: number; alert: Alert })[] {
+function listPositions() {
   return POSITIONS.map(withComputed);
 }
 
-function findPosition(id: string): (Position & { referenceCoverage: number; alert: Alert }) | undefined {
+function findPosition(id: string) {
   const position = POSITIONS.find((p) => p.id === id);
   return position ? withComputed(position) : undefined;
 }

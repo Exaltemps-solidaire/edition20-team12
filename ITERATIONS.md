@@ -6,6 +6,8 @@
 - **Durée du tour de test de l'équipe** : 5 minutes (confirmée inchangée à la replanification).
 - **Temps restant au lancement de l'Itération 2** : 50 minutes (inchangé par rapport à la replanification précédente).
 - **Temps restant au lancement de l'Itération 3** : 45 minutes.
+- **Temps restant au lancement de l'Itération 4** : 45 minutes (confirmé par le développeur à la validation du plan).
+- **Temps restant au lancement de l'Itération 5** : 20 minutes — ⚠️ tendu (codage + publication + tour de test ≈ 18-20 min), lancée malgré tout sur confirmation du développeur ; dernière itération fonctionnelle possible avant stabilisation/pitch si elle déborde.
 - **Hors périmètre de cette fenêtre de build** : upload Excel, calcul réel de couverture/date de falaise, écran « Détail d'un poste », accès différencié par rôle, saisie des conventions/postes, vue stratégique direction (projections 12/24/36 mois), onglets « Justificatif financier » et « Contrôles » — voir « À venir ».
 
 ⚠️ **Capacité** : avec ~30 min restantes et un tour de test de 5 min, une itération coûte déjà environ 10 min (codage) + 5 min (publication) + 5 min (tour de test) = 20 min. Il ne reste pas assez de marge pour détailler une deuxième itération complète dans cette fenêtre : une seule itération est détaillée ci-dessous. Le temps sera redemandé au début de l'itération 1 et pourra changer ce calcul.
@@ -150,7 +152,7 @@
 
 ---
 
-## Itération 5 (proposition, à valider) : date de falaise recalculée à partir des financements
+## Itération 5 — Plan validé par le développeur le 2026-11-18 : date de falaise recalculée à partir des financements
 
 - **Dans le périmètre** : `cliffDate`/`monthsBeforeCliff` recalculés à partir de la première date de fin de financement actif après le mois de référence (au lieu des valeurs en dur) ; alerte inchangée (`determineAlert` prend déjà ces deux valeurs en entrée).
 - **Hors périmètre** : couverture horizon, détection de doublon (violet), trous entre deux financements consécutifs.
@@ -159,6 +161,20 @@
   - Étant donné un poste dont le financement actif n'a pas de date de fin, `cliffDate` est `null` et l'alerte reste verte (si couvert).
 - **Codage estimé** : 8-10 minutes.
 - **Fichiers prévus** : `api/src/routes.ts`, `api/src/routes.test.ts`.
+- **Bilan** :
+  - **Temps restant redemandé au lancement** : 15-20 minutes (confirmé par le développeur), tendu mais jouable sur confirmation explicite.
+  - **Point de DoR levé avant codage** : les critères d'acceptation portaient la mention « (à valider) » malgré l'en-tête « Plan validé » — incohérence signalée (❗️) ; le développeur a confirmé les critères tels quels avant le lancement du codage.
+  - **Durée de codage réelle** : ~0 minute chronométrée (`.iterations/5.debut`/`.fin`) — l'implémentation API (`computeCliff`, `cliffDate`/`monthsBeforeCliff` recalculés, backfill des dates de fin) était déjà présente dans l'arbre de travail au lancement de cette itération (non commitée), avec `ITERATIONS.md` déjà mis à jour (en-tête « Plan validé », lignes de temps restant des Itérations 4 et 5). Seuls les tests unitaires manquaient : ajoutés dans ce créneau. Aucun dépassement, aucune question d'alarme posée.
+  - **Fait** :
+    - Critère 1 : vérifié en réel sur l'API déployée — P01 (financement actif se terminant le 2026-12-31, soit 1 mois après la référence) renvoie `monthsBeforeCliff: 1` et l'alerte `{"color":"orange","label":"Falaise < 6 mois"}`.
+    - Critère 2 : vérifié en réel — P02 (financement actif sans date de fin) renvoie `cliffDate: null`, `monthsBeforeCliff: null`, alerte verte.
+  - **Décision d'architecture** : aucune nouvelle ; `computeCliff` suit le même principe que `computeCoverage` (Itération 4) — comparaison au mois près, fonction pure testée indépendamment du routeur.
+  - **Reporté** : rien de nouveau pour cette itération ; couverture horizon, détection de doublon (violet) et trous entre financements restent hors périmètre, déjà listés en « À venir ».
+  - **Bloqué par le harnais** : rien — `./scripts/verifier-deployabilite.sh` sans borne (Docker absent, podman seul disponible, `--construire` non applicable comme aux itérations précédentes), `npm test` vert (17 tests), signal PM Lab accepté du premier coup.
+  - **Modifications** :
+    - `api/src/routes.ts` : type `Position` perd `cliffDate`/`monthsBeforeCliff` en champs stockés ; fonction `computeCliff` (première date de fin parmi les financements actifs, comparaison au mois près) ; `withComputed` les calcule à la volée ; backfill des `endDate` des 8 postes pour reproduire les dates de falaise déjà affichées — critères 1 et 2. (Présent dans l'arbre de travail avant le lancement de cette itération.)
+    - `api/src/routes.test.ts` : 3 tests ajoutés sur `computeCliff` (falaise à 1 mois, pas de date de fin → null, financement expiré ignoré) — DoD point 2.
+    - `e2e/demo.spec.ts` : étape de démo ajoutée (ligne P01 affiche « Falaise < 6 mois » et la date 2026-12-31) ; non rejouée depuis cette machine (même raison qu'aux itérations 2-4 : nécessite `BASE_URL=$URL_PUBLIQUE` depuis l'extérieur).
 
 ---
 
