@@ -73,6 +73,29 @@
   margin: 1.5rem 0;
 }
 
+.statusBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.status-acquis {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-sollicite {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.status-a_solliciter {
+  background: #eceff1;
+  color: #546e7a;
+}
+
 .form {
   display: flex;
   flex-direction: column;

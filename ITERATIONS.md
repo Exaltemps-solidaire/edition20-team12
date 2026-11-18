@@ -276,10 +276,44 @@
     - `frontend/src/app/postes/[id]/position-detail.module.css` : classes `selectWrap`, `kpiCard`, `alertDot`, `orphanBanner`.
   - **Démo non mise à jour** : `e2e/demo.spec.ts` inchangé — le sélecteur de poste et les nouvelles cartes KPI ne sont pas couverts par la démo existante, à ajouter si le temps le permet dans une itération dédiée.
 
+---
+
+## Itération 10 — Demandée par le développeur le 2026-11-18 : statut de financement (acquis/sollicité/à solliciter)
+
+- **Déclencheur** : `passation/documents-association/donnees-hackathon-budgets.pdf`, les 3 vrais budgets de La Cloche. Le document impose une règle d'usage explicite : « Ne présente pas un chiffre comme un engagement de La Cloche envers un financeur. » Le modèle actuel (`Funding` sans statut) ne permet pas de distinguer un financement acquis d'une simple demande — incompatible avec cette règle si on y branche les vraies données.
+- **Choix de périmètre** : 3 options présentées au développeur (statut minimal en lecture seule / intégration complète avec statut financeur / financement sans ce champ, en acceptant le risque de non-conformité). Le développeur a choisi **l'intégration complète**.
+- ❗️ **Écart au rituel habituel, assumé explicitement** : à la question « combien de minutes reste-t-il ? », le développeur a répondu « go » deux fois de suite (une fois en texte libre, une fois en réponse libre à un choix structuré proposant des tranches de temps). Faute de réponse exploitable, j'ai pris moi-même la décision prudente : réduire cette itération à l'infrastructure du statut (modèle + filtrage + UI), **sans** encore remplacer les données fictives par les vraies données du PDF — ce remplacement est reporté à une itération dédiée (voir « À venir »). C'est une hypothèse de travail, pas une confirmation du développeur.
+- **Dans le périmètre** :
+  - `Funding.status?: "acquis" | "sollicite" | "a_solliciter"` (champ optionnel, absence = `"acquis"` pour ne pas casser les données déjà saisies).
+  - `isSecured(funding)` : un financement compte comme sécurisé seulement s'il est `"acquis"` (ou sans statut).
+  - `computeCoverage` et `computeCliff` filtrent désormais par `isActive && isSecured` : seuls les financements acquis comptent dans la couverture affichée et la date de falaise.
+  - `hasOverlap`/`computeOverlapMonths` **ne filtrent pas** par statut, volontairement : le but du doublon est de repérer une double demande *avant* qu'elle parte, pas seulement un doublon déjà acquis — cas réel documenté dans le PDF (« Chargé·e du programme », demandé à la fois à Fondation Bettencourt/acquis, Fondation de France/sollicitée et Lululemon/à solliciter pour le même reste à financer).
+  - `parseFundingInput` accepte un statut optionnel (défaut `"sollicite"` : un financement tout juste saisi dans l'outil n'est pas acquis tant que personne ne l'a confirmé).
+  - Backfill explicite : tous les financements historiques de `POSITIONS` reçoivent `status: "acquis"` (comportement inchangé, mais lisible).
+  - UI : badge de statut (vert/orange/gris) devant chaque financement dans le détail d'un poste ; sélecteur de statut dans le formulaire d'ajout.
+- **Hors périmètre, reporté** : remplacement des postes fictifs par les vraies données du PDF (voir « À venir »).
+- **Critères d'acceptation** :
+  1. Un financement `"sollicite"` ou `"a_solliciter"` actif au mois de référence n'est pas compté dans `referenceCoverage` ni dans `cliffDate`/`monthsBeforeCliff` — vérifié en réel (P05 + ajout d'un financement `sollicite` de 4000€ : `referenceCoverage` reste à 0).
+  2. Les financements déjà saisis sans statut se comportent exactement comme avant (`isSecured` traite l'absence de statut comme acquis) — `npm test` vert, aucune régression sur les 24 tests existants.
+  3. `isSecured` et le filtrage de `computeCoverage` sont testés (3 tests ajoutés).
+- **Bilan** :
+  - Codage non chronométré avec précision (pas de réponse exploitable sur le temps restant, cf. ❗️ ci-dessus) — traité avec la même prudence qu'un budget serré : périmètre réduit, pas de fonctionnalité superflue.
+  - Les 3 critères sont vérifiés : `npm test` → 30 tests (27 + 3 nouveaux), tous verts ; `next build` propre ; contrat de déployabilité sans borne ; vérification en réel sur l'API déployée (financement `sollicite` ajouté à P05, `referenceCoverage` resté à 0).
+  - **Décision d'architecture** (à ajouter à `adr.md` si pas encore fait) : `isSecured` ne s'applique qu'à `computeCoverage`/`computeCliff`, jamais à `hasOverlap`/`computeOverlapMonths` — le doublon doit alerter sur une demande en cours, pas seulement sur un engagement confirmé.
+  - **Bloqué par le harnais** : rien.
+  - **Démo non mise à jour** : `e2e/demo.spec.ts` inchangé — le nouveau sélecteur de statut n'est pas couvert, à ajouter si le temps le permet.
+  - **Modifications** :
+    - `api/src/routes.ts` : type `FundingStatus`, champ `Funding.status`, fonction `isSecured`, filtrage par `isSecured` dans `computeCoverage`/`computeCliff`, `parseFundingInput` accepte/valide `status` (défaut `"sollicite"`), backfill `status: "acquis"` sur `POSITIONS`.
+    - `api/src/routes.test.ts` : 3 tests (`computeCoverage` ignore un financement non-acquis ; `isSecured` x2).
+    - `frontend/src/app/postes/[id]/position-detail.tsx` : type `FundingStatus`, badge de statut par financement, sélecteur de statut dans le formulaire d'ajout (défaut « à solliciter »).
+    - `frontend/src/app/postes/[id]/position-detail.module.css` : classes `statusBadge`, `status-acquis`/`status-sollicite`/`status-a_solliciter`.
+  - Déployé (`podman build`/`push`/`compose up -d --force-recreate`), vérifié via `curl` (health, détail P05, ajout d'un financement sollicité sans effet sur la couverture).
+
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
-1. Détection des trous entre financements consécutifs — suite de l'Itération 7.
-2. Saisie des postes eux-mêmes (onglet « Postes »), remplaçant le tableau en dur `POSITIONS` — si le temps le permet, sinon les postes restent fixes pour le pitch.
-3. Accès différencié par rôle : vue lecture seule pour la responsable d'antenne, sans salaire affiché.
-4. Vue stratégique direction : projections à 12, 24 et 36 mois (I2, écrans Maestro).
-5. Onglets « Justificatif financier » et « Contrôles » — ❓ aucune photo ne les montre dans la passation : à clarifier avec les cadreurs avant de les construire (périmètre incertain).
+1. Remplacer 1 à 3 postes fictifs par les vraies données du PDF (`donnees-hackathon-budgets.pdf`), en particulier « Chargé·e du programme » avec ses 3 vrais financeurs (Fondation Bettencourt acquis, Fondation de France sollicitée, Lululemon à solliciter) — démontre le vrai risque de double financement décrit par le document, maintenant que le statut existe. ⚠️ Respecter les règles d'usage du PDF : pas de prénom individuel, pas de salaire mis en avant, raisonner par poste et par financeur.
+2. Détection des trous entre financements consécutifs — suite de l'Itération 7.
+3. Saisie des postes eux-mêmes (onglet « Postes »), remplaçant le tableau en dur `POSITIONS` — si le temps le permet, sinon les postes restent fixes pour le pitch.
+4. Accès différencié par rôle : vue lecture seule pour la responsable d'antenne, sans salaire affiché.
+5. Vue stratégique direction : projections à 12, 24 et 36 mois (I2, écrans Maestro).
+6. Onglets « Justificatif financier » et « Contrôles » — ❓ aucune photo ne les montre dans la passation : à clarifier avec les cadreurs avant de les construire (périmètre incertain).

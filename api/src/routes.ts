@@ -4,7 +4,13 @@
 
 export type Reponse = { statut: number; corps?: unknown };
 
-export type Funding = { funder: string; amount: number; startDate: string; endDate: string | null };
+// Statut du financement (données réelles, passation/documents-association/donnees-hackathon-budgets.pdf) :
+// un chiffre "sollicité" ou "à solliciter" n'est pas un engagement du financeur, contrairement à "acquis".
+// Champ optionnel pour rester compatible avec les financements déjà saisis sans statut (traités comme acquis,
+// cf. isSecured) — pas de migration de données nécessaire.
+export type FundingStatus = "acquis" | "sollicite" | "a_solliciter";
+
+export type Funding = { funder: string; amount: number; startDate: string; endDate: string | null; status?: FundingStatus };
 
 export type Position = {
   id: string;
@@ -25,24 +31,33 @@ function isActive(f: Funding, referenceMonth: string): boolean {
   return f.startDate.slice(0, 7) <= referenceMonth && (f.endDate === null || f.endDate.slice(0, 7) >= referenceMonth);
 }
 
-// Somme des financements actifs à la date de référence, rapportée au coût mensuel
-// du poste (cadrage/3-solution.md : "le tableur croise automatiquement les deux").
+// Un financement sans statut (saisi avant cette itération) est traité comme acquis :
+// c'est le seul comportement possible tant qu'on n'a pas redemandé le statut à l'équipe.
+export function isSecured(f: Funding): boolean {
+  return (f.status ?? "acquis") === "acquis";
+}
+
+// Somme des financements actifs ET acquis à la date de référence, rapportée au coût
+// mensuel du poste (cadrage/3-solution.md : "le tableur croise automatiquement les deux").
 // Comparaison au mois près (YYYY-MM) : la couverture est une notion mensuelle, et un
 // financement saisi en cours de mois doit couvrir tout le mois de référence.
+// Seuls les financements acquis comptent : un chiffre sollicité ou à solliciter n'est pas
+// un engagement du financeur (donnees-hackathon-budgets.pdf, règle d'usage).
 export function computeCoverage(fundings: Funding[], monthlyCost: number, referenceDate: string): number {
   if (monthlyCost <= 0) return 0;
   const referenceMonth = referenceDate.slice(0, 7);
-  const total = fundings.filter((f) => isActive(f, referenceMonth)).reduce((sum, f) => sum + f.amount, 0);
+  const total = fundings.filter((f) => isActive(f, referenceMonth) && isSecured(f)).reduce((sum, f) => sum + f.amount, 0);
   return Math.min(100, Math.round((total / monthlyCost) * 100));
 }
 
-// Date de falaise : fin la plus proche parmi les financements actifs au mois de
+// Date de falaise : fin la plus proche parmi les financements actifs et acquis au mois de
 // référence (un financement déjà expiré ne menace plus rien, il est déjà compté
-// dans la couverture à 0). Pas de date de fin parmi les actifs → pas de falaise prévisible.
+// dans la couverture à 0 ; un financement non acquis ne menace rien non plus, il n'est pas
+// compté dans la couverture). Pas de date de fin parmi les actifs → pas de falaise prévisible.
 export function computeCliff(fundings: Funding[], referenceDate: string): { cliffDate: string | null; monthsBeforeCliff: number | null } {
   const referenceMonth = referenceDate.slice(0, 7);
   const endings = fundings
-    .filter((f) => isActive(f, referenceMonth) && f.endDate !== null)
+    .filter((f) => isActive(f, referenceMonth) && isSecured(f) && f.endDate !== null)
     .map((f) => f.endDate as string)
     .sort();
   if (endings.length === 0) return { cliffDate: null, monthsBeforeCliff: null };
@@ -79,8 +94,11 @@ export function computeHorizonCoverage(fundings: Funding[], monthlyCost: number,
 export type Alert = { color: "red" | "orange" | "green" | "purple"; label: string };
 
 // Doublon : plus d'un financement actif au mois de référence (chevauchement
-// entre deux conventions). Les trous entre financements consécutifs restent
-// hors périmètre (voir ITERATIONS.md, Itération 7).
+// entre deux conventions). Compte tous les statuts, y compris sollicité et à
+// solliciter : le but est de repérer une double demande avant qu'elle ne parte,
+// pas seulement un doublon déjà acquis (cas réel "Chargé·e du programme",
+// donnees-hackathon-budgets.pdf). Les trous entre financements consécutifs
+// restent hors périmètre (voir ITERATIONS.md, Itération 7).
 export function hasOverlap(fundings: Funding[], referenceMonth: string): boolean {
   return fundings.filter((f) => isActive(f, referenceMonth)).length > 1;
 }
@@ -112,18 +130,22 @@ export function determineAlert(referenceCoverage: number, monthsBeforeCliff: num
 // the sketch showed ; funding end dates (iteration 5 backfill) reproduce the
 // cliff dates the sketch showed, now that both are computed instead of stored —
 // see ITERATIONS.md, Itérations 4 et 5, for why and what replaces them later.
+// Statut explicite "acquis" sur ces financements historiques (itération statut) : ce sont
+// des conventions déjà signées dans la fiction du prototype, pas de nouveaux chiffres non
+// engagés — le champ est explicite plutôt qu'implicite pour que la donnée reste lisible
+// telle quelle le jour où elle sera remplacée par les vrais budgets.
 const POSITIONS: Position[] = [
-  { id: "P01", title: "Délégué·e générale", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
-  { id: "P02", title: "Resp. administratif·ve et financier·e", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
-  { id: "P03", title: "Directrice développement & partenariats", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
-  { id: "P04", title: "Responsable d'antenne", branch: "Paris", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
+  { id: "P01", title: "Délégué·e générale", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31", status: "acquis" }] },
+  { id: "P02", title: "Resp. administratif·ve et financier·e", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null, status: "acquis" }] },
+  { id: "P03", title: "Directrice développement & partenariats", branch: "Siège", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31", status: "acquis" }] },
+  { id: "P04", title: "Responsable d'antenne", branch: "Paris", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31", status: "acquis" }] },
   // Case from the passation sketch (screen 3): Salarié·e E left 2026-06-30, Salarié·e F
   // arrives 2026-09-01, the Lululemon funding ended with the departure and is now orphaned.
-  { id: "P05", title: "Responsable d'antenne", branch: "Lyon", monthlyCost: 4000, fundings: [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }] },
-  { id: "P06", title: "Chargé·e de projet alimentation", branch: "Paris", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
-  { id: "P07", title: "Animateur·rice Le Carillon", branch: "Bordeaux", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
+  { id: "P05", title: "Responsable d'antenne", branch: "Lyon", monthlyCost: 4000, fundings: [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30", status: "acquis" }] },
+  { id: "P06", title: "Chargé·e de projet alimentation", branch: "Paris", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31", status: "acquis" }] },
+  { id: "P07", title: "Animateur·rice Le Carillon", branch: "Bordeaux", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31", status: "acquis" }] },
   // Cas de démonstration de l'Itération 7 : deux financements actifs en même temps (doublon).
-  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }, { funder: "Fondation complémentaire", amount: 1000, startDate: "2026-01-01", endDate: null }] },
+  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null, status: "acquis" }, { funder: "Fondation complémentaire", amount: 1000, startDate: "2026-01-01", endDate: null, status: "acquis" }] },
 ];
 
 function withComputed(position: Position): Position & { referenceCoverage: number; cliffDate: string | null; monthsBeforeCliff: number | null; horizonCoverage: number; overlapMonths: number; alert: Alert } {
@@ -144,19 +166,25 @@ function findPosition(id: string) {
   return position ? withComputed(position) : undefined;
 }
 
+const FUNDING_STATUSES: FundingStatus[] = ["acquis", "sollicite", "a_solliciter"];
+
 // Validates the body of POST /api/v1/positions/:id/financements. Only funder
 // and amount are required (DoD iteration 3, critère 2) ; startDate defaults to
-// today since the form (iteration 3) doesn't ask for it.
+// today since the form (iteration 3) doesn't ask for it. Le statut par défaut est
+// "sollicite" : un financement tout juste saisi dans l'outil n'est pas encore acquis
+// tant que personne ne l'a confirmé (donnees-hackathon-budgets.pdf, règle d'usage).
 export function parseFundingInput(body: unknown): Funding | null {
   if (typeof body !== "object" || body === null) return null;
-  const { funder, amount, endDate } = body as Record<string, unknown>;
+  const { funder, amount, endDate, status } = body as Record<string, unknown>;
   if (typeof funder !== "string" || funder.trim() === "") return null;
   if (typeof amount !== "number" || Number.isNaN(amount)) return null;
+  const resolvedStatus = typeof status === "string" && FUNDING_STATUSES.includes(status as FundingStatus) ? (status as FundingStatus) : "sollicite";
   return {
     funder: funder.trim(),
     amount,
     startDate: new Date().toISOString().slice(0, 10),
     endDate: typeof endDate === "string" && endDate.trim() !== "" ? endDate : null,
+    status: resolvedStatus,
   };
 }
 

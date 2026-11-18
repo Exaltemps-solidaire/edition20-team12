@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCliff, computeCoverage, computeHorizonCoverage, computeOverlapMonths, determineAlert, hasOverlap, parseFundingInput, router } from "./routes.ts";
+import { computeCliff, computeCoverage, computeHorizonCoverage, computeOverlapMonths, determineAlert, hasOverlap, isSecured, parseFundingInput, router } from "./routes.ts";
 
 describe("router", () => {
   it("répond 200 sur les deux routes de santé", () => {
@@ -70,6 +70,26 @@ describe("computeCoverage", () => {
   it("compte un financement démarré en cours du mois de référence (comparaison au mois près)", () => {
     const fundings = [{ funder: "Nouveau bailleur", amount: 2000, startDate: "2026-11-18", endDate: null }];
     expect(computeCoverage(fundings, 4000, referenceDate)).toBe(50);
+  });
+
+  it("ignore un financement actif mais seulement sollicité ou à solliciter", () => {
+    const fundings = [
+      { funder: "Fondation de France", amount: 4000, startDate: "2026-01-01", endDate: null, status: "sollicite" as const },
+      { funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: null, status: "a_solliciter" as const },
+    ];
+    expect(computeCoverage(fundings, 4000, referenceDate)).toBe(0);
+  });
+});
+
+describe("isSecured", () => {
+  it("traite un financement sans statut comme acquis (données saisies avant l'ajout du champ)", () => {
+    expect(isSecured({ funder: "A", amount: 100, startDate: "2026-01-01", endDate: null })).toBe(true);
+  });
+
+  it("ne traite comme acquis que le statut 'acquis'", () => {
+    expect(isSecured({ funder: "A", amount: 100, startDate: "2026-01-01", endDate: null, status: "acquis" })).toBe(true);
+    expect(isSecured({ funder: "A", amount: 100, startDate: "2026-01-01", endDate: null, status: "sollicite" })).toBe(false);
+    expect(isSecured({ funder: "A", amount: 100, startDate: "2026-01-01", endDate: null, status: "a_solliciter" })).toBe(false);
   });
 });
 

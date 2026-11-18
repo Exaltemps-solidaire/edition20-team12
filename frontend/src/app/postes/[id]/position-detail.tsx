@@ -7,7 +7,15 @@ import styles from "./position-detail.module.css";
 
 type Alert = { color: "red" | "orange" | "green" | "purple"; label: string };
 
-type Funding = { funder: string; amount: number; startDate: string; endDate: string | null };
+type FundingStatus = "acquis" | "sollicite" | "a_solliciter";
+
+type Funding = { funder: string; amount: number; startDate: string; endDate: string | null; status?: FundingStatus };
+
+const STATUS_LABELS: Record<FundingStatus, string> = {
+  acquis: "Acquis",
+  sollicite: "Sollicité",
+  a_solliciter: "À solliciter",
+};
 
 type Position = {
   id: string;
@@ -31,6 +39,7 @@ export default function PositionDetail({ id }: { id: string }) {
   const [funder, setFunder] = useState("");
   const [amount, setAmount] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [status, setStatus] = useState<FundingStatus>("sollicite");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,6 +70,7 @@ export default function PositionDetail({ id }: { id: string }) {
         funder,
         amount: amount === "" ? undefined : Number(amount),
         endDate: endDate === "" ? null : endDate,
+        status,
       }),
     });
     if (!response.ok) {
@@ -71,6 +81,7 @@ export default function PositionDetail({ id }: { id: string }) {
     setFunder("");
     setAmount("");
     setEndDate("");
+    setStatus("sollicite");
   }
 
   const orphanedFunding = position?.fundings.find((f) => f.endDate !== null && position.referenceCoverage === 0);
@@ -132,11 +143,15 @@ export default function PositionDetail({ id }: { id: string }) {
           {position.fundings.length === 0 && <p>Aucun financement saisi.</p>}
           {position.fundings.length > 0 && (
             <ul>
-              {position.fundings.map((funding, index) => (
-                <li key={index}>
-                  {funding.funder} : {funding.amount} € — {funding.startDate} → {funding.endDate ?? "en cours"}
-                </li>
-              ))}
+              {position.fundings.map((funding, index) => {
+                const status = funding.status ?? "acquis";
+                return (
+                  <li key={index}>
+                    <span className={`${styles.statusBadge} ${styles[`status-${status}`]}`}>{STATUS_LABELS[status]}</span>{" "}
+                    {funding.funder} : {funding.amount} € — {funding.startDate} → {funding.endDate ?? "en cours"}
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -153,6 +168,14 @@ export default function PositionDetail({ id }: { id: string }) {
             <label>
               Date de fin (optionnelle)
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </label>
+            <label>
+              Statut
+              <select value={status} onChange={(e) => setStatus(e.target.value as FundingStatus)}>
+                <option value="a_solliciter">À solliciter</option>
+                <option value="sollicite">Sollicité</option>
+                <option value="acquis">Acquis</option>
+              </select>
             </label>
             <button type="submit">Ajouter</button>
             {error && <p className={pageStyles.error}>{error}</p>}
