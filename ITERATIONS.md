@@ -234,6 +234,24 @@
 
 ---
 
+---
+
+## Itération 8 — Lancée en one-shot par le développeur le 2026-11-18 : habillage visuel aligné sur le prototype PM Lab (Écran 2)
+
+- **Déclencheur** : comparaison de l'Écran 2 (`passation/croquis/ecran-02-...png`, maquette haute-fidélité) et du prototype interactif PM Lab (`/be/squads/J7BT47/prototype/versions/1`, version non retenue par le Maestro mais seule source pixel-exacte) avec le rendu réel de l'app.
+- **Dans le périmètre** : aucune logique métier nouvelle, uniquement l'alignement visuel de l'écran « Postes » sur la maquette : pastilles d'alerte avec fond coloré (rouge/orange/vert/violet) au lieu d'un simple point + texte ; barres de progression mini pour « Couverture mois réf. » et « Couverture horizon » (remplissage vert si 100%, rouge sinon, comme dans le prototype) ; palette de couleurs exacte du prototype (`--rouge #CF4B31`, `--orange #F7A258`, `--vert #2E7D32`, `--violet #7B1FA2`) ; titre de page et barre d'onglets (Vue d'ensemble / Postes / Détail d'un poste / Tableau de bord Direction) reprenant le prototype — les trois onglets sans écran correspondant sont désactivés (`disabled`), pas de lien mort ; note de bas de tableau reprenant le texte du prototype sur la règle de falaise.
+- **Hors périmètre** : onglets « Justificatif financier » / « Contrôles » (ne figurent pas dans le prototype interactif réel, contrairement à la lecture IA de la maquette — écart noté) ; colonne tronquée (« Mois avant falaise » suivie d'une colonne illisible sur la maquette) non reproduite, son libellé restant inconnu (❓, déjà signalé en Itération 7) ; onglets Vue d'ensemble/Détail/Dashboard Direction non implémentés, seulement affichés désactivés.
+- **Critères d'acceptation** : le tableau des postes affiche des pastilles colorées et des barres de progression visuellement proches de l'Écran 2 ; build frontend (`next build`) et `npm test` passent ; aucune régression de données (mêmes valeurs, juste l'habillage).
+- **Bilan** :
+  - Codage non chronométré (`.iterations/`), demande explicite du développeur de traiter en one-shot sans repasser par le rituel temps restant / alarme — écart assumé au cadre habituel pour cette itération ponctuelle de polish visuel.
+  - Build (`next build`) et `npm test` (22 tests API + 0 test front, inchangé) verts. Contrat de déployabilité (`./scripts/verifier-deployabilite.sh`) : aucune borne.
+  - Pas de nouveau test Vitest : aucune logique métier ajoutée (uniquement CSS/JSX), donc hors du point 2 de la DoD.
+  - **Modifications** :
+    - `frontend/src/app/page.module.css` : classes `pageTitle`, `tabNav`/`tabBtn`/`tabBtnActive`, `tableWrap`, `tableNote`, `pastille`/`pastille-{red,orange,green,purple}`, `barWrap`/`barTrack`/`barFill`/`barFull`/`barPartial`/`barPct` ; couleurs `.red`/`.orange`/`.green`/`.purple` recalées sur la palette exacte du prototype.
+    - `frontend/src/app/page.tsx` : pastilles colorées, barres de progression (fonction `coverageBar`), titre + barre d'onglets (Postes actif, le reste désactivé), note de bas de tableau.
+  - **Démo non mise à jour** : `e2e/demo.spec.ts` inchangé — les sélecteurs existants (texte, structure du tableau) restent valides, seul l'habillage CSS change.
+  - Déployé (`podman build`/`push`/`compose up -d --force-recreate frontend`), vérifié via `curl localhost:8080/` (nouveau JS présent) et `curl localhost:8081/health`.
+
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
 1. Détection des trous entre financements consécutifs — suite de l'Itération 7.
