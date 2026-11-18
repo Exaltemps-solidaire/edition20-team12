@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 
-type Alert = { color: "red" | "orange" | "green"; label: string };
+type Alert = { color: "red" | "orange" | "green" | "purple"; label: string };
 
 type Position = {
   id: string;

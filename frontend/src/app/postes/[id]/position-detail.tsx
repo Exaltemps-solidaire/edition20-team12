@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import pageStyles from "../../page.module.css";
 import styles from "./position-detail.module.css";
 
-type Alert = { color: "red" | "orange" | "green"; label: string };
+type Alert = { color: "red" | "orange" | "green" | "purple"; label: string };
 
 type Funding = { funder: string; amount: number; startDate: string; endDate: string | null };
 

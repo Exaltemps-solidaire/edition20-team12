@@ -76,14 +76,23 @@ export function computeHorizonCoverage(fundings: Funding[], monthlyCost: number,
   return Math.round(total / months.length);
 }
 
-export type Alert = { color: "red" | "orange" | "green"; label: string };
+export type Alert = { color: "red" | "orange" | "green" | "purple"; label: string };
 
-// Rule from screen 2 (sketch): not covered this month = red; cliff within 6
-// months = orange; otherwise green. Overlap (purple) isn't detected yet: it
-// requires cross-referencing funding agreements, out of scope for this iteration.
-export function determineAlert(referenceCoverage: number, monthsBeforeCliff: number | null): Alert {
+// Doublon : plus d'un financement actif au mois de référence (chevauchement
+// entre deux conventions). Les trous entre financements consécutifs restent
+// hors périmètre (voir ITERATIONS.md, Itération 7).
+export function hasOverlap(fundings: Funding[], referenceMonth: string): boolean {
+  return fundings.filter((f) => isActive(f, referenceMonth)).length > 1;
+}
+
+// Rule from screen 2 (sketch): not covered this month = red; overlap = purple;
+// cliff within 6 months = orange; otherwise green.
+export function determineAlert(referenceCoverage: number, monthsBeforeCliff: number | null, overlap = false): Alert {
   if (referenceCoverage === 0) {
     return { color: "red", label: "Non couvert" };
+  }
+  if (overlap) {
+    return { color: "purple", label: "Doublon" };
   }
   if (monthsBeforeCliff !== null && monthsBeforeCliff < 6) {
     return { color: "orange", label: "Falaise < 6 mois" };
@@ -107,14 +116,16 @@ const POSITIONS: Position[] = [
   { id: "P05", title: "Responsable d'antenne", branch: "Lyon", monthlyCost: 4000, fundings: [{ funder: "Lululemon", amount: 4000, startDate: "2026-01-01", endDate: "2026-06-30" }] },
   { id: "P06", title: "Chargé·e de projet alimentation", branch: "Paris", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2027-03-31" }] },
   { id: "P07", title: "Animateur·rice Le Carillon", branch: "Bordeaux", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: "2026-12-31" }] },
-  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }] },
+  // Cas de démonstration de l'Itération 7 : deux financements actifs en même temps (doublon).
+  { id: "P08", title: "Chargé·e de formation", branch: "Lille", monthlyCost: 4000, fundings: [{ funder: "Financement historique", amount: 4000, startDate: "2026-01-01", endDate: null }, { funder: "Fondation complémentaire", amount: 1000, startDate: "2026-01-01", endDate: null }] },
 ];
 
 function withComputed(position: Position): Position & { referenceCoverage: number; cliffDate: string | null; monthsBeforeCliff: number | null; horizonCoverage: number; alert: Alert } {
   const referenceCoverage = computeCoverage(position.fundings, position.monthlyCost, REFERENCE_DATE);
   const { cliffDate, monthsBeforeCliff } = computeCliff(position.fundings, REFERENCE_DATE);
   const horizonCoverage = computeHorizonCoverage(position.fundings, position.monthlyCost, HORIZON_START_MONTH, HORIZON_END_MONTH);
-  return { ...position, referenceCoverage, cliffDate, monthsBeforeCliff, horizonCoverage, alert: determineAlert(referenceCoverage, monthsBeforeCliff) };
+  const overlap = hasOverlap(position.fundings, REFERENCE_DATE.slice(0, 7));
+  return { ...position, referenceCoverage, cliffDate, monthsBeforeCliff, horizonCoverage, alert: determineAlert(referenceCoverage, monthsBeforeCliff, overlap) };
 }
 
 function listPositions() {

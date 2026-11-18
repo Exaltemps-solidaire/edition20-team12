@@ -206,9 +206,37 @@
 
 ---
 
+## Itération 7 — Plan validé par le développeur ("go tqt") le 2026-11-18 : alerte violette, doublon de financement
+
+⚠️ **Micro-itération risquée, acceptée par le développeur** malgré un temps restant annoncé de 10-20 minutes (en dessous du plancher habituel de 20 min pour coder+publier+tester). Périmètre réduit au strict minimum.
+
+- **Dans le périmètre** : `determineAlert` détecte un chevauchement (plus d'un financement actif au mois de référence) et renvoie l'alerte violette « Doublon » ; fonction `hasOverlap(fundings, referenceMonth)` ; un poste de démonstration (P08) reçoit un second financement actif en backfill pour rendre le cas visible.
+- **Hors périmètre** : détection des trous (absence de financement entre deux périodes), UI dédiée au-delà de la pastille de couleur existante, priorité fine entre plusieurs alertes simultanées au-delà de rouge > violet > orange > vert (choisie par défaut, non validée par les cadreurs).
+- **Critères d'acceptation** :
+  1. Un poste avec deux financements actifs au mois de référence → alerte violette « Doublon ».
+  2. Un poste avec un seul financement actif → alerte inchangée (rouge/orange/vert selon les règles existantes).
+- **Codage estimé** : 3-4 minutes (budget extrême).
+- **Fichiers prévus** : `api/src/routes.ts`, `api/src/routes.test.ts`, `frontend/src/app/page.module.css` (couleur de la pastille).
+- **Bilan** :
+  - **Durée de codage réelle** : ~0 minute chronométrée (`.iterations/7.debut`/`.fin`), aucun dépassement.
+  - **Fait** :
+    - Critère 1 : vérifié en réel — P08 (deux financements actifs au mois de référence, backfill de démonstration) renvoie `{"color":"purple","label":"Doublon"}`.
+    - Critère 2 : vérifié en réel — P02 (un seul financement actif) reste `{"color":"green","label":"OK"}`, inchangé.
+  - **Décision d'architecture** : priorité des alertes fixée par défaut (non validée par les cadreurs, à signaler ❓) : rouge (non couvert) > violet (doublon) > orange (falaise < 6 mois) > vert. `determineAlert` garde un 3ᵉ paramètre optionnel (`overlap = false`) pour ne pas casser les appels existants (tests, code appelant).
+  - **Reporté** : détection des trous entre financements consécutifs, hors périmètre, reste en tête de « À venir ».
+  - **Bloqué par le harnais** : rien — contrat sans borne, `npm test` vert (22 tests), `tsc --noEmit` propre côté front, signal PM Lab accepté du premier coup.
+  - **Démo non mise à jour** : `e2e/demo.spec.ts` inchangé, même raison qu'à l'Itération 6 (budget extrême).
+  - **Modifications** :
+    - `api/src/routes.ts` : `Alert.color` accepte `"purple"` ; fonction `hasOverlap` ; `determineAlert` prend un 3ᵉ paramètre `overlap` ; backfill P08 avec un second financement actif (cas de démo) — critères 1 et 2.
+    - `api/src/routes.test.ts` : 3 tests ajoutés (`hasOverlap` x2, `determineAlert` violet) — DoD point 2.
+    - `frontend/src/app/page.module.css` : classe `.purple` pour la pastille.
+    - `frontend/src/app/page.tsx`, `frontend/src/app/postes/[id]/position-detail.tsx` : type `Alert.color` étendu à `"purple"`.
+
+---
+
 ## À venir (ordre de priorité, à détailler au fil de l'eau)
 
-1. Détection des trous et doublons entre financements (alerte violet/chevauchement) — suite de l'Itération 6.
+1. Détection des trous entre financements consécutifs — suite de l'Itération 7.
 2. Saisie des postes eux-mêmes (onglet « Postes »), remplaçant le tableau en dur `POSITIONS` — si le temps le permet, sinon les postes restent fixes pour le pitch.
 3. Accès différencié par rôle : vue lecture seule pour la responsable d'antenne, sans salaire affiché.
 4. Vue stratégique direction : projections à 12, 24 et 36 mois (I2, écrans Maestro).

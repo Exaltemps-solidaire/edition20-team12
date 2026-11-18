@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCliff, computeCoverage, computeHorizonCoverage, determineAlert, parseFundingInput, router } from "./routes.ts";
+import { computeCliff, computeCoverage, computeHorizonCoverage, determineAlert, hasOverlap, parseFundingInput, router } from "./routes.ts";
 
 describe("router", () => {
   it("répond 200 sur les deux routes de santé", () => {
@@ -107,9 +107,30 @@ describe("computeHorizonCoverage", () => {
   });
 });
 
+describe("hasOverlap", () => {
+  const referenceMonth = "2026-11";
+
+  it("détecte un doublon quand deux financements sont actifs au mois de référence", () => {
+    const fundings = [
+      { funder: "A", amount: 4000, startDate: "2026-01-01", endDate: null },
+      { funder: "B", amount: 1000, startDate: "2026-01-01", endDate: null },
+    ];
+    expect(hasOverlap(fundings, referenceMonth)).toBe(true);
+  });
+
+  it("ne détecte rien avec un seul financement actif", () => {
+    const fundings = [{ funder: "A", amount: 4000, startDate: "2026-01-01", endDate: null }];
+    expect(hasOverlap(fundings, referenceMonth)).toBe(false);
+  });
+});
+
 describe("determineAlert", () => {
   it("signale rouge quand le poste n'est pas couvert ce mois", () => {
     expect(determineAlert(0, 0).color).toBe("red");
+  });
+
+  it("signale violet quand il y a un doublon de financement", () => {
+    expect(determineAlert(100, null, true).color).toBe("purple");
   });
 
   it("signale orange quand la date de falaise est à moins de 6 mois", () => {
